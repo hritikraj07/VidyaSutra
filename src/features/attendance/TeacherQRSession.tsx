@@ -45,6 +45,7 @@ export const TeacherQRSession: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(5);
+  const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState(120);
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -126,20 +127,41 @@ export const TeacherQRSession: React.FC = () => {
     return () => clearInterval(timer);
   }, [activeSession?.currentToken, activeSession?.isActive, refreshSession]);
 
+  // Synchronize 2-minute session countdown timer
+  useEffect(() => {
+    if (!activeSession || !activeSession.isActive) return;
+
+    const initialSessionSecs =
+      typeof activeSession.remainingSessionSeconds === 'number'
+        ? activeSession.remainingSessionSeconds
+        : 120;
+    setSessionSecondsRemaining(initialSessionSecs);
+
+    const sessionTimer = setInterval(() => {
+      setSessionSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          refreshSession();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(sessionTimer);
+  }, [activeSession?.id, activeSession?.isActive, activeSession?.startedAt, refreshSession]);
+
   // Render QR code to canvas whenever token or session updates
   useEffect(() => {
-    if (!canvasRef.current || !activeSession?.currentToken || !activeSession.isActive) return;
+    if (!canvasRef.current || !activeSession || !activeSession.isActive) return;
 
-    const payloadToEncode =
-      activeSession.qrPayload ||
-      JSON.stringify({
-        sid: activeSession.sessionId || activeSession.id,
-        tok: activeSession.currentToken,
-      });
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://vidyasutra.vercel.app';
+    const sid = activeSession.sessionId || activeSession.id;
+    const tok = activeSession.masterToken || activeSession.currentToken || activeSession.token;
+    const scanUrl = `${baseUrl}/attendance/scan?sid=${sid}&token=${tok}`;
 
     QRCode.toCanvas(
       canvasRef.current,
-      payloadToEncode,
+      scanUrl,
       {
         width: 280,
         margin: 2,
@@ -147,13 +169,13 @@ export const TeacherQRSession: React.FC = () => {
           dark: '#172554', // Deep Navy
           light: '#FFFFFF',
         },
-        errorCorrectionLevel: 'H',
+        errorCorrectionLevel: 'M',
       },
       (err) => {
         if (err) console.error('QR code generation error:', err);
       }
     );
-  }, [activeSession?.currentToken, activeSession?.qrPayload, activeSession?.isActive]);
+  }, [activeSession?.id, activeSession?.masterToken, activeSession?.currentToken, activeSession?.isActive]);
 
   // Load Cohort data for "Manage Students"
   const loadCohortData = useCallback(async () => {
@@ -851,172 +873,299 @@ export const TeacherQRSession: React.FC = () => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 textAlign: 'center',
-                padding: '28px 20px',
+                padding: '28px 24px',
                 backgroundColor: '#FFFFFF',
                 borderRadius: 'var(--radius-xl)',
                 border: '1px solid var(--border)',
                 boxShadow: 'var(--shadow-md)',
+                position: 'relative',
               }}
             >
-              {/* Course & Section Subtitle above QR */}
-              <div style={{ marginBottom: '14px' }}>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#172554' }}>
-                  {activeSession?.subject || activeSession?.courseName || 'Data Structures'}
-                </h2>
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginTop: '4px' }}>
-                  <span
-                    style={{
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      color: '#243B7A',
-                      backgroundColor: '#EFF6FF',
-                      padding: '2px 10px',
-                      borderRadius: '6px',
-                    }}
-                  >
-                    Section {activeSession?.section || 'CSE-A'}
+              {/* Header Badge */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#EFF6FF',
+                  color: '#1D4ED8',
+                  padding: '4px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  marginBottom: '10px',
+                }}
+              >
+                <Sparkles size={13} />
+                <span>VIDYASUTRA ATTENDANCE</span>
+              </div>
+
+              {/* Title: LIVE ATTENDANCE */}
+              <h2
+                style={{
+                  fontSize: '1.35rem',
+                  fontWeight: 900,
+                  color: '#172554',
+                  margin: '0 0 14px 0',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                LIVE ATTENDANCE
+              </h2>
+
+              {/* Subject & Class Information Panel */}
+              <div
+                style={{
+                  width: '100%',
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: '12px',
+                  border: '1px solid #E2E8F0',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '10px',
+                  textAlign: 'left',
+                }}
+              >
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                    Subject
+                  </span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#172554', wordBreak: 'break-word' }}>
+                    {activeSession?.subject || activeSession?.courseName || activeSession?.courseCode || 'Data Structures'}
+                  </span>
+                </div>
+
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                    Class
+                  </span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#172554' }}>
+                    {activeSession?.course
+                      ? `${activeSession.course} - ${activeSession.section}`
+                      : `B.Tech CSE - ${activeSession?.section || 'A'}`}
+                  </span>
+                </div>
+
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                    Session
                   </span>
                   <span
                     style={{
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      color: '#64748B',
-                      backgroundColor: '#F1F5F9',
-                      padding: '2px 10px',
-                      borderRadius: '6px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      fontSize: '0.82rem',
+                      fontWeight: 800,
+                      color: sessionSecondsRemaining > 0 && activeSession?.isActive ? '#15803D' : '#DC2626',
                     }}
                   >
-                    Sem {activeSession?.semester || 1}
+                    <span
+                      style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: sessionSecondsRemaining > 0 && activeSession?.isActive ? '#22C55E' : '#DC2626',
+                        display: 'inline-block',
+                      }}
+                    />
+                    {sessionSecondsRemaining > 0 && activeSession?.isActive ? 'Live' : 'Expired'}
+                  </span>
+                </div>
+
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                    Expires In
+                  </span>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '0.88rem',
+                      fontWeight: 900,
+                      fontFamily: 'monospace',
+                      color: sessionSecondsRemaining > 20 ? '#1D4ED8' : '#DC2626',
+                    }}
+                  >
+                    <Clock size={13} />
+                    {sessionSecondsRemaining > 0
+                      ? `${String(Math.floor(sessionSecondsRemaining / 60)).padStart(2, '0')}:${String(sessionSecondsRemaining % 60).padStart(2, '0')}`
+                      : '00:00'}
                   </span>
                 </div>
               </div>
 
-              {/* QR Canvas Container with Frame */}
-              <div
-                style={{
-                  padding: '16px',
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: '20px',
-                  border: '2px solid #E2E8F0',
-                  boxShadow: '0 8px 20px -4px rgba(23, 37, 84, 0.08)',
-                  position: 'relative',
-                  marginBottom: '16px',
-                }}
-              >
-                <canvas ref={canvasRef} style={{ display: 'block', borderRadius: '12px' }} />
-              </div>
+              {/* QR Canvas or Expired View */}
+              {sessionSecondsRemaining > 0 && activeSession?.isActive ? (
+                <>
+                  {/* QR Canvas Container with Frame */}
+                  <div
+                    style={{
+                      padding: '16px',
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: '20px',
+                      border: '2px solid #E2E8F0',
+                      boxShadow: '0 8px 24px -4px rgba(23, 37, 84, 0.12)',
+                      position: 'relative',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    <canvas ref={canvasRef} style={{ display: 'block', borderRadius: '12px' }} />
+                  </div>
 
-              {/* Refreshing... Countdown Progress Bar (5 seconds) */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  backgroundColor: '#F1F5F9',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '6px 16px',
-                  marginBottom: '14px',
-                }}
-              >
-                <Clock size={16} color="#243B7A" />
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#172554' }}>
-                  Refreshing in: <strong>{secondsRemaining}s</strong>
-                </span>
+                  {/* Instruction text */}
+                  <p
+                    style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      color: '#334155',
+                      margin: '0 0 12px 0',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Scan this QR using<br />the VidyaSutra Student app
+                  </p>
+
+                  {/* Attendance Count Status */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: '#F1F5F9',
+                      padding: '8px 18px',
+                      borderRadius: '10px',
+                      marginBottom: '16px',
+                      border: '1px solid #CBD5E1',
+                    }}
+                  >
+                    <Users size={18} color="#243B7A" />
+                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#172554' }}>
+                      Students Present: <strong>{presentCount} / {totalEnrolled}</strong>
+                    </span>
+                  </div>
+
+                  {/* End Session Button */}
+                  <button
+                    onClick={handleEndSession}
+                    disabled={isEnding}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      width: '100%',
+                      maxWidth: '280px',
+                      backgroundColor: '#EF4444',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 18px',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      cursor: isEnding ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                    }}
+                  >
+                    <StopCircle size={16} />
+                    <span>{isEnding ? 'Ending Session...' : 'End Session'}</span>
+                  </button>
+                </>
+              ) : (
+                /* Session Expired Overlay / State */
                 <div
                   style={{
-                    width: '40px',
-                    height: '6px',
-                    backgroundColor: '#CBD5E1',
-                    borderRadius: '3px',
-                    overflow: 'hidden',
+                    padding: '24px 16px',
+                    backgroundColor: '#FEF2F2',
+                    borderRadius: '16px',
+                    border: '1.5px solid #FECACA',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '12px',
+                    marginBottom: '14px',
                   }}
                 >
                   <div
                     style={{
-                      width: `${(secondsRemaining / 5) * 100}%`,
-                      height: '100%',
-                      backgroundColor: '#243B7A',
-                      transition: 'width 1s linear',
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      backgroundColor: '#FEE2E2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#DC2626',
                     }}
-                  />
-                </div>
-              </div>
+                  >
+                    <Clock size={24} />
+                  </div>
 
-              {/* Current Short-Lived Token */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '6px 12px',
-                  fontFamily: 'monospace',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
-                  color: '#172554',
-                  marginBottom: '12px',
-                }}
-              >
-                <span>{activeSession?.currentToken || 'ROTATING-TOKEN'}</span>
-                <button
-                  onClick={copyToken}
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#991B1B', margin: 0 }}>
+                    Attendance session expired.
+                  </h3>
+
+                  <p style={{ fontSize: '0.82rem', color: '#7F1D1D', margin: 0, lineHeight: 1.4 }}>
+                    The 2-minute validity window for this session has ended. This QR code is now invalid and can no longer be scanned.
+                  </p>
+
+                  <button
+                    onClick={handleEndSession}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: '#243B7A',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      marginTop: '6px',
+                    }}
+                  >
+                    <RotateCcw size={16} />
+                    <span>Start New Session</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Token copy info for testing fallback */}
+              {sessionSecondsRemaining > 0 && activeSession?.isActive && (
+                <div
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: copied ? '#198754' : '#64748B',
-                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                  }}
-                  title="Copy token code"
-                >
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                </button>
-              </div>
-
-              {/* Status and Count Badges */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginBottom: '12px',
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                    color: '#198754',
-                    backgroundColor: '#DCFCE7',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
+                    gap: '6px',
+                    marginTop: '12px',
+                    fontSize: '0.72rem',
+                    color: '#64748B',
                   }}
                 >
-                  ● Attendance Active
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.85rem',
-                    fontWeight: 800,
-                    color: '#172554',
-                    backgroundColor: '#F1F5F9',
-                    padding: '4px 12px',
-                    borderRadius: '6px',
-                  }}
-                >
-                  {presentCount} Students Present
-                </span>
-              </div>
-
-              <p style={{ fontSize: '0.74rem', color: '#64748B', maxWidth: '300px', lineHeight: 1.4 }}>
-                Dynamic QR rotates every 5 seconds. Fixed 30-meter classroom GPS validation prevents remote proxies and shared screenshots.
-              </p>
+                  <span>Token: {activeSession?.currentToken || activeSession?.masterToken || 'TOKEN'}</span>
+                  <button
+                    onClick={copyToken}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: copied ? '#198754' : '#64748B',
+                      cursor: 'pointer',
+                      padding: '2px',
+                    }}
+                    title="Copy token code"
+                  >
+                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Live Student Attendee Log & Stats */}
@@ -1036,41 +1185,58 @@ export const TeacherQRSession: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    marginBottom: '10px',
+                    marginBottom: '14px',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Users size={18} color="#243B7A" />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#172033' }}>
-                      Classroom Turnout
+                    <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#172033' }}>
+                      Today's Attendance
                     </span>
                   </div>
                   <span
                     style={{
                       fontSize: '0.8rem',
-                      fontWeight: 700,
-                      color: presentPercent >= 75 ? '#198754' : '#D97706',
+                      fontWeight: 800,
+                      color: presentPercent >= 75 ? '#15803D' : '#D97706',
+                      backgroundColor: presentPercent >= 75 ? '#DCFCE7' : '#FEF3C7',
+                      padding: '3px 10px',
+                      borderRadius: '6px',
                     }}
                   >
-                    {presentPercent}% Present
+                    Rate: {presentPercent}%
                   </span>
                 </div>
 
-                <div style={{ marginBottom: '12px' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '0.8rem',
-                      marginBottom: '6px',
-                      color: '#64748B',
-                    }}
-                  >
-                    <span>Marked Present:</span>
-                    <span style={{ fontWeight: 700, color: '#172554' }}>
-                      {presentCount} of {totalEnrolled} students
-                    </span>
+                {/* 4 Analytics Metrics: Present, Absent, Total, Attendance Rate */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '8px',
+                    marginBottom: '14px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ padding: '8px 4px', backgroundColor: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Present</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#15803D' }}>{presentCount}</div>
                   </div>
+                  <div style={{ padding: '8px 4px', backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #FECACA' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#991B1B', textTransform: 'uppercase' }}>Absent</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#DC2626' }}>{Math.max(0, totalEnrolled - presentCount)}</div>
+                  </div>
+                  <div style={{ padding: '8px 4px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Total</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#172554' }}>{totalEnrolled}</div>
+                  </div>
+                  <div style={{ padding: '8px 4px', backgroundColor: '#EFF6FF', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase' }}>Rate</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1D4ED8' }}>{presentPercent}%</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
                   <div
                     style={{
                       height: '8px',

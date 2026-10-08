@@ -807,7 +807,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => handleLaunchJudgeDemo('student')}
                 disabled={isLoading}
-                title="Launch demo as Student (Aarav Sharma, Roll 21BCSE101)"
+                title="Launch demo as Student Demo"
                 style={{
                   padding: '8px 6px',
                   borderRadius: '10px',
@@ -842,14 +842,14 @@ export default function LoginPage() {
               >
                 <span style={{ fontSize: '1rem' }}>🎓</span>
                 <span style={{ color: '#243B7A' }}>Student</span>
-                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Aarav Sharma</span>
+                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Student Demo</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleLaunchJudgeDemo('teacher')}
                 disabled={isLoading}
-                title="Launch demo as Faculty (Dr. Ramesh Verma)"
+                title="Launch demo as Faculty Demo"
                 style={{
                   padding: '8px 6px',
                   borderRadius: '10px',
@@ -884,7 +884,7 @@ export default function LoginPage() {
               >
                 <span style={{ fontSize: '1rem' }}>👨‍🏫</span>
                 <span style={{ color: '#243B7A' }}>Faculty</span>
-                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Dr. Ramesh</span>
+                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Faculty Demo</span>
               </button>
 
               <button

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import jsQR from 'jsqr';
 import { useApp } from '@/context/AppContext';
 import {
   X,
@@ -14,7 +15,8 @@ import {
   ArrowRight,
   RefreshCw,
   MapPin,
-  Compass,
+  Lock,
+  Keyboard,
 } from 'lucide-react';
 
 export const QRScannerModal: React.FC = () => {
@@ -31,6 +33,9 @@ export const QRScannerModal: React.FC = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
+
   const [studentCoords, setStudentCoords] = useState<{
     latitude: number;
     longitude: number;
@@ -39,13 +44,14 @@ export const QRScannerModal: React.FC = () => {
   const [locationStatus, setLocationStatus] = useState<
     'idle' | 'requesting' | 'granted' | 'denied'
   >('idle');
-  const [locationError, setLocationError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-  // Acquire student device geolocation
-  const requestStudentLocation = (): Promise<{
+  // Optional Geolocation request
+  const requestStudentLocation = useCallback((): Promise<{
     latitude: number;
     longitude: number;
     accuracy: number;
@@ -53,7 +59,6 @@ export const QRScannerModal: React.FC = () => {
     return new Promise((resolve) => {
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
         setLocationStatus('denied');
-        setLocationError('Geolocation is not supported by your browser.');
         resolve(null);
         return;
       }
@@ -68,193 +73,248 @@ export const QRScannerModal: React.FC = () => {
           };
           setStudentCoords(coords);
           setLocationStatus('granted');
-          setLocationError(null);
           resolve(coords);
         },
         (err) => {
-          console.warn('Student geolocation error:', err.message);
+          console.warn('Geolocation notice:', err.message);
           setLocationStatus('denied');
-          setLocationError('Device location permission required to verify physical classroom presence.');
           resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
       );
     });
-  };
+  }, []);
 
-  // Initialize camera and location when modal opens
+  // Start Camera
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    setCameraActive(false);
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera access is not supported by this browser.');
+      return;
+    }
+
+    try {
+      // Stop any existing stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+
+      // Try environment/rear camera first, fallback to any available camera
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        await videoRef.current.play().catch(() => {});
+        setCameraActive(true);
+      }
+    } catch (err: any) {
+      console.warn('Camera initialization error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('Camera permission is required to scan attendance. Please enable camera access in your browser or device settings.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setCameraError('No camera detected on this device. You can enter the session code manually below.');
+        setShowManualInput(true);
+      } else {
+        setCameraError('Unable to access camera: ' + (err.message || 'Please check device permissions.'));
+      }
+      setCameraActive(false);
+    }
+  }, []);
+
+  // Manage Camera & Geolocation when modal opens/closes
   useEffect(() => {
     if (!isQrScannerOpen) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
       setCameraActive(false);
+      setCameraError(null);
+      resetLastScanResult();
       return;
     }
 
-    // Automatically prompt for location when scanner opens
     requestStudentLocation();
-
-    let isMounted = true;
-    async function startCamera() {
-      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-        setCameraError('Camera access not supported by this browser.');
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
-        });
-
-        if (!isMounted) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          setCameraActive(true);
-        }
-      } catch (err: any) {
-        console.warn('Camera preview not started:', err.message);
-        setCameraError(null);
-        setCameraActive(false);
-      }
-    }
-
     startCamera();
 
     return () => {
-      isMounted = false;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
     };
-  }, [isQrScannerOpen]);
+  }, [isQrScannerOpen, startCamera, requestStudentLocation, resetLastScanResult]);
 
-  // BarcodeDetector interval scanner for live video
+  // Main Handle Scan Payload
+  const handleScanPayload = useCallback(
+    async (rawPayload: string) => {
+      if (isValidating) return;
+      setIsValidating(true);
+      resetLastScanResult();
+
+      try {
+        let loc = studentCoords;
+        if (!loc && locationStatus === 'idle') {
+          loc = await requestStudentLocation();
+        }
+
+        let sessionId = '';
+        let token = rawPayload.trim();
+
+        // 1. Check if JSON payload: { sid: "...", tok: "..." }
+        if (token.startsWith('{') && token.endsWith('}')) {
+          try {
+            const parsed = JSON.parse(token);
+            if (parsed.sid) sessionId = parsed.sid;
+            if (parsed.tok) token = parsed.tok;
+            if (parsed.token) token = parsed.token;
+          } catch {}
+        }
+        // 2. Check if URL payload: https://.../attendance/scan?sid=...&token=...
+        else if (token.includes('?') || token.includes('/attendance/scan') || token.startsWith('http')) {
+          try {
+            let urlObj: URL | null = null;
+            try {
+              urlObj = new URL(token);
+            } catch {
+              urlObj = new URL(`http://localhost${token.startsWith('/') ? '' : '/'}${token}`);
+            }
+            if (urlObj) {
+              const uSid = urlObj.searchParams.get('sid') || urlObj.searchParams.get('session_id') || urlObj.searchParams.get('session');
+              const uTok = urlObj.searchParams.get('token') || urlObj.searchParams.get('session');
+              if (uSid) sessionId = uSid;
+              if (uTok) token = uTok;
+            }
+          } catch {}
+        }
+
+        // 3. Fallback: if sessionId missing, use activeSession if available
+        if (!sessionId && (activeSession?.id || activeSession?.sessionId)) {
+          sessionId = activeSession.id || activeSession.sessionId;
+        }
+
+        await validateStudentScan(token, sessionId, rawPayload, loc || undefined);
+      } finally {
+        setIsValidating(false);
+      }
+    },
+    [isValidating, resetLastScanResult, studentCoords, locationStatus, requestStudentLocation, activeSession, validateStudentScan]
+  );
+
+  // Real-time jsQR video frame decoding loop
   useEffect(() => {
-    if (!cameraActive || !videoRef.current || !('BarcodeDetector' in window)) return;
-
-    let detector: any;
-    try {
-      // @ts-expect-error BarcodeDetector browser API
-      detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-    } catch {
+    if (!cameraActive || !videoRef.current || !canvasRef.current || !isQrScannerOpen || lastScanResult?.success) {
       return;
     }
 
-    const interval = setInterval(async () => {
-      if (!videoRef.current || isValidating || lastScanResult?.success) return;
-      try {
-        const barcodes = await detector.detect(videoRef.current);
-        if (barcodes.length > 0) {
-          const rawValue = barcodes[0].rawValue;
-          if (rawValue) {
-            handleScanPayload(rawValue);
+    let isScanning = true;
+
+    const scanLoop = () => {
+      if (!isScanning || !videoRef.current || !canvasRef.current) return;
+      const video = videoRef.current;
+
+      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert',
+          });
+
+          if (qrCode && qrCode.data && qrCode.data.trim().length > 0) {
+            isScanning = false;
+            handleScanPayload(qrCode.data.trim());
+            return;
           }
         }
-      } catch {
-        // detection frame error
       }
-    }, 400);
 
-    return () => clearInterval(interval);
-  }, [cameraActive, isValidating, lastScanResult]);
+      animationFrameRef.current = requestAnimationFrame(scanLoop);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(scanLoop);
+
+    return () => {
+      isScanning = false;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [cameraActive, isQrScannerOpen, lastScanResult, handleScanPayload]);
 
   if (!isQrScannerOpen) return null;
 
-  const handleScanPayload = async (rawPayload: string, forcedLocation?: any) => {
-    if (isValidating) return;
-    setIsValidating(true);
-    resetLastScanResult();
-
-    try {
-      let loc = forcedLocation || studentCoords;
-      if (!loc) {
-        loc = await requestStudentLocation();
-      }
-
-      let sessionId = activeSession?.id || activeSession?.sessionId || '';
-      let token = rawPayload;
-
-      try {
-        const parsed = JSON.parse(rawPayload);
-        if (parsed.sid) sessionId = parsed.sid;
-        if (parsed.tok) token = parsed.tok;
-      } catch {
-        // Raw token string
-      }
-
-      await validateStudentScan(token, sessionId, rawPayload, loc || undefined);
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  const handleSimulateActiveScan = async (testScenario: 'inside' | 'outside' = 'inside') => {
-    let loc = studentCoords;
-    if (testScenario === 'inside') {
-      // If studentCoords not set, provide simulated within classroom coordinates (28.6139, 77.2090)
-      if (!loc) {
-        loc = { latitude: 28.6139, longitude: 77.2090, accuracy: 8 };
-        setStudentCoords(loc);
-      }
-    } else {
-      // Outside radius test: far away location (e.g. 500m away)
-      loc = { latitude: 28.6200, longitude: 77.2150, accuracy: 12 };
-    }
-
-    if (!activeSession?.currentToken) {
-      await validateStudentScan('VS-CS301-A1B2-C3D4', 'ses_demo', undefined, loc || undefined);
-      return;
-    }
-
-    const payload =
-      activeSession.qrPayload ||
-      JSON.stringify({
-        sid: activeSession.id || activeSession.sessionId,
-        tok: activeSession.currentToken,
-      });
-
-    await handleScanPayload(payload, loc);
-  };
-
-  const handleExpiredTestScan = async () => {
-    setIsValidating(true);
-    resetLastScanResult();
-    const loc = studentCoords || { latitude: 28.6139, longitude: 77.2090, accuracy: 8 };
-    await validateStudentScan(
-      'VS-CS301-EXPIRED-SCREENSHOT',
-      activeSession?.id || activeSession?.sessionId || 'test_ses',
-      undefined,
-      loc
-    );
-    setIsValidating(false);
-  };
-
   const handleClose = () => {
-    resetLastScanResult();
     setIsQrScannerOpen(false);
+    resetLastScanResult();
+    setShowManualInput(false);
+  };
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualCode.trim()) return;
+    await handleScanPayload(manualCode.trim());
   };
 
   return (
-    <div className="vs-modal-backdrop" onClick={handleClose}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        animation: 'fadeIn 0.2s ease-out',
+      }}
+    >
+      {/* Hidden processing canvas for jsQR frame decoding */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       <div
         className="vs-card"
-        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '480px',
+          maxWidth: '440px',
           padding: '24px',
-          borderRadius: 'var(--radius-xl)',
+          borderRadius: '20px',
           position: 'relative',
           backgroundColor: '#FFFFFF',
-          boxShadow: '0 20px 40px -10px rgba(23, 37, 84, 0.25)',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35)',
           border: '1px solid #E2E8F0',
         }}
       >
@@ -270,8 +330,8 @@ export const QRScannerModal: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
               style={{
-                width: '36px',
-                height: '36px',
+                width: '38px',
+                height: '38px',
                 borderRadius: '10px',
                 backgroundColor: 'rgba(36, 59, 122, 0.1)',
                 color: '#243B7A',
@@ -287,7 +347,7 @@ export const QRScannerModal: React.FC = () => {
                 Scan Attendance
               </h2>
               <p style={{ fontSize: '0.78rem', color: '#64748B', margin: 0 }}>
-                Dynamic QR + Classroom GPS Verification
+                Point camera at faculty&apos;s live QR code
               </p>
             </div>
           </div>
@@ -311,226 +371,30 @@ export const QRScannerModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Location Status Badge */}
-        {!lastScanResult?.success && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: locationStatus === 'granted' ? '#ECFDF5' : '#F8FAFC',
-              border: `1px solid ${locationStatus === 'granted' ? '#A7F3D0' : '#E2E8F0'}`,
-              marginBottom: '12px',
-              fontSize: '0.78rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <MapPin
-                size={14}
-                color={locationStatus === 'granted' ? '#166534' : '#64748B'}
-              />
-              <span
-                style={{
-                  fontWeight: 600,
-                  color: locationStatus === 'granted' ? '#166534' : '#475569',
-                }}
-              >
-                {locationStatus === 'granted'
-                  ? 'Device Location Active (GPS Ready)'
-                  : locationStatus === 'requesting'
-                  ? 'Requesting Device Geolocation...'
-                  : 'Classroom Location Verification'}
-              </span>
-            </div>
-
-            {locationStatus !== 'granted' && (
-              <button
-                onClick={() => requestStudentLocation()}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#243B7A',
-                  fontWeight: 700,
-                  fontSize: '0.74rem',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                Enable GPS
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* CAMERA / SCANNER VIEWPORT (When not yet successfully marked) */}
-        {!lastScanResult?.success && (
-          <div
-            style={{
-              position: 'relative',
-              height: '240px',
-              backgroundColor: '#0F172A',
-              borderRadius: '18px',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '18px',
-              border: '2px solid #1E293B',
-            }}
-          >
-            {/* Live Video Feed */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: cameraActive ? 'block' : 'none',
-              }}
-            />
-
-            {/* Viewfinder Target Reticle Frame */}
-            <div
-              style={{
-                width: '180px',
-                height: '180px',
-                border: '2px dashed rgba(255, 255, 255, 0.45)',
-                borderRadius: '16px',
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-              }}
-            >
-              {/* Corner accent brackets */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '-2px',
-                  left: '-2px',
-                  width: '18px',
-                  height: '18px',
-                  borderTop: '3px solid #E7A23B',
-                  borderLeft: '3px solid #E7A23B',
-                  borderTopLeftRadius: '6px',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '-2px',
-                  right: '-2px',
-                  width: '18px',
-                  height: '18px',
-                  borderTop: '3px solid #E7A23B',
-                  borderRight: '3px solid #E7A23B',
-                  borderTopRightRadius: '6px',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '-2px',
-                  left: '-2px',
-                  width: '18px',
-                  height: '18px',
-                  borderBottom: '3px solid #E7A23B',
-                  borderLeft: '3px solid #E7A23B',
-                  borderBottomLeftRadius: '6px',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '-2px',
-                  right: '-2px',
-                  width: '18px',
-                  height: '18px',
-                  borderBottom: '3px solid #E7A23B',
-                  borderRight: '3px solid #E7A23B',
-                  borderBottomRightRadius: '6px',
-                }}
-              />
-
-              {/* Animated Laser Scanning Line */}
-              <div
-                className="animate-scan-laser"
-                style={{
-                  position: 'absolute',
-                  left: '6px',
-                  right: '6px',
-                  height: '2px',
-                  backgroundColor: '#38BDF8',
-                  boxShadow: '0 0 12px 2px #38BDF8',
-                  borderRadius: '1px',
-                }}
-              />
-
-              {!cameraActive && (
-                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
-                  <Camera size={26} style={{ margin: '0 auto 6px auto', display: 'block', opacity: 0.8 }} />
-                  <span>Align Teacher&apos;s Live QR</span>
-                </div>
-              )}
-            </div>
-
-            {/* Dynamic Security Indicator Badge */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '10px',
-                backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                backdropFilter: 'blur(4px)',
-                padding: '4px 14px',
-                borderRadius: 'var(--radius-full)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.72rem',
-                color: '#94A3B8',
-                zIndex: 2,
-              }}
-            >
-              <ShieldCheck size={14} color="#10B981" />
-              <span>5s Rotating Window + Geofencing</span>
-            </div>
-          </div>
-        )}
-
-        {/* SUCCESS STATE FEEDBACK (Exact Format from Specification) */}
+        {/* 1. SUCCESS CONFIRMATION SCREEN */}
         {lastScanResult?.success && (
           <div
             style={{
-              padding: '24px 20px',
-              borderRadius: 'var(--radius-xl)',
+              padding: '22px 18px',
+              borderRadius: '16px',
               backgroundColor: '#F0FDF4',
               border: '2px solid #BBF7D0',
-              marginBottom: '20px',
               textAlign: 'center',
+              marginBottom: '12px',
             }}
           >
-            {/* Success Icon */}
             <div
               style={{
                 width: '56px',
                 height: '56px',
                 borderRadius: '50%',
-                backgroundColor: '#198754',
+                backgroundColor: '#15803D',
                 color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 12px auto',
-                boxShadow: '0 6px 16px rgba(25, 135, 84, 0.3)',
+                margin: '0 auto 12px',
+                boxShadow: '0 6px 16px rgba(21, 128, 61, 0.3)',
               }}
             >
               <CheckCircle2 size={32} />
@@ -538,28 +402,31 @@ export const QRScannerModal: React.FC = () => {
 
             <div
               style={{
-                fontSize: '1.3rem',
+                fontSize: '1.25rem',
                 fontWeight: 900,
                 color: '#15803D',
-                marginBottom: '14px',
+                marginBottom: '4px',
                 letterSpacing: '-0.02em',
               }}
             >
-              ✓ Attendance Marked
+              ✓ ATTENDANCE MARKED
             </div>
+            <p style={{ fontSize: '0.82rem', color: '#166534', margin: '0 0 16px', fontWeight: 600 }}>
+              You&apos;re marked present for:
+            </p>
 
             {/* Receipt Summary Card */}
             <div
               style={{
                 backgroundColor: '#FFFFFF',
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: '12px',
                 padding: '16px',
                 border: '1px solid #DCFCE7',
                 textAlign: 'left',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
-                marginBottom: '14px',
+                marginBottom: '16px',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem' }}>
@@ -570,16 +437,9 @@ export const QRScannerModal: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem' }}>
-                <span style={{ color: '#64748B', fontWeight: 600 }}>Class:</span>
-                <span style={{ fontWeight: 700, color: '#243B7A' }}>
-                  {lastScanResult.details?.section || 'CSE-A'}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem' }}>
-                <span style={{ color: '#64748B', fontWeight: 600 }}>Period:</span>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Faculty:</span>
                 <span style={{ fontWeight: 700, color: '#172554' }}>
-                  {lastScanResult.details?.period || 'Period 1'}
+                  {lastScanResult.details?.teacher || 'Dr. Ramesh Verma'}
                 </span>
               </div>
 
@@ -595,51 +455,49 @@ export const QRScannerModal: React.FC = () => {
                 </span>
               </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '0.86rem',
-                  paddingTop: '6px',
-                  borderTop: '1px dashed #E2E8F0',
-                }}
-              >
-                <span style={{ color: '#64748B', fontWeight: 600 }}>Verification:</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', paddingTop: '6px', borderTop: '1px dashed #E2E8F0' }}>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Status:</span>
                 <span
                   style={{
                     fontWeight: 800,
-                    color: '#166534',
+                    color: '#15803D',
                     backgroundColor: '#DCFCE7',
                     padding: '2px 8px',
-                    borderRadius: '6px',
+                    borderRadius: '4px',
                     fontSize: '0.78rem',
                   }}
                 >
-                  QR + Location
+                  PRESENT
                 </span>
               </div>
             </div>
 
-            <div
+            <button
+              onClick={handleClose}
               style={{
-                fontSize: '0.78rem',
-                color: '#4B5563',
-                display: 'flex',
-                justifyContent: 'space-around',
+                width: '100%',
+                padding: '12px 18px',
+                backgroundColor: '#243B7A',
+                color: '#FFFFFF',
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(36, 59, 122, 0.25)',
               }}
             >
-              <span>Teacher: <strong>{lastScanResult.details?.teacher || 'Dr. Verma'}</strong></span>
-              <span>Student: <strong>{lastScanResult.details?.student || currentUser?.name || 'Student'}</strong></span>
-            </div>
+              Back to Dashboard
+            </button>
           </div>
         )}
 
-        {/* ERROR / REJECTION FEEDBACK */}
+        {/* 2. ERROR FEEDBACK */}
         {lastScanResult && !lastScanResult.success && (
           <div
             style={{
               padding: '16px',
-              borderRadius: 'var(--radius-lg)',
+              borderRadius: '12px',
               backgroundColor: lastScanResult.duplicate ? '#FFFBEB' : '#FEF2F2',
               border: `1px solid ${lastScanResult.duplicate ? '#FDE68A' : '#FECACA'}`,
               marginBottom: '16px',
@@ -648,152 +506,286 @@ export const QRScannerModal: React.FC = () => {
           >
             <div
               style={{
-                width: '42px',
-                height: '42px',
+                width: '40px',
+                height: '40px',
                 borderRadius: '50%',
                 backgroundColor: lastScanResult.duplicate ? '#D97706' : '#DC2626',
                 color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 10px auto',
+                margin: '0 auto 8px auto',
               }}
             >
-              <AlertTriangle size={22} />
+              <AlertTriangle size={20} />
             </div>
             <h3
               style={{
-                fontSize: '0.98rem',
+                fontSize: '0.96rem',
                 fontWeight: 800,
                 color: lastScanResult.duplicate ? '#B45309' : '#B91C1C',
                 marginBottom: '4px',
               }}
             >
-              {lastScanResult.duplicate ? 'Already Marked' : 'Attendance Rejected'}
+              {lastScanResult.duplicate ? 'Attendance Already Marked' : 'Attendance Not Marked'}
             </h3>
-            <p
-              style={{
-                fontSize: '0.84rem',
-                color: lastScanResult.duplicate ? '#92400E' : '#991B1B',
-                margin: 0,
-                lineHeight: 1.4,
-              }}
-            >
+            <p style={{ fontSize: '0.82rem', color: lastScanResult.duplicate ? '#92400E' : '#991B1B', margin: 0, lineHeight: 1.4 }}>
               {lastScanResult.message}
             </p>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {!lastScanResult?.success ? (
-            <>
-              {/* Primary Scan Button */}
-              <button
-                onClick={() => handleSimulateActiveScan('inside')}
-                disabled={isValidating}
+        {/* 3. LIVE CAMERA VIEWPORT (When not yet successful) */}
+        {!lastScanResult?.success && (
+          <>
+            {/* Camera Permission / Error Warning */}
+            {cameraError && (
+              <div
                 style={{
+                  padding: '14px',
+                  borderRadius: '12px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  marginBottom: '14px',
+                  textAlign: 'center',
+                }}
+              >
+                <AlertTriangle size={24} color="#DC2626" style={{ margin: '0 auto 6px' }} />
+                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#B91C1C', marginBottom: '4px' }}>
+                  Camera Permission Required
+                </div>
+                <p style={{ fontSize: '0.78rem', color: '#991B1B', margin: '0 0 10px', lineHeight: 1.4 }}>
+                  {cameraError}
+                </p>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                  <button
+                    onClick={startCamera}
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: '#243B7A',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Retry Camera Access
+                  </button>
+                  <button
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: '#F1F5F9',
+                      color: '#172554',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {showManualInput ? 'Hide Code Input' : 'Enter Code Manually'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Video Viewport */}
+            {!cameraError && (
+              <div
+                style={{
+                  position: 'relative',
+                  height: '240px',
+                  backgroundColor: '#0F172A',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  backgroundColor: '#243B7A',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px',
-                  fontSize: '0.92rem',
-                  fontWeight: 700,
-                  cursor: isValidating ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 4px 12px rgba(36, 59, 122, 0.25)',
+                  marginBottom: '16px',
+                  border: '2px solid #1E293B',
                 }}
               >
-                {isValidating ? (
-                  <>
-                    <RefreshCw size={18} className="animate-spin" />
-                    <span>Verifying QR & Geolocation...</span>
-                  </>
-                ) : (
-                  <>
-                    <QrCode size={18} />
-                    <span>Scan Classroom QR</span>
-                  </>
-                )}
-              </button>
-
-              {/* Edge-case simulation testing buttons */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <button
-                  onClick={handleExpiredTestScan}
-                  disabled={isValidating}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px',
-                    backgroundColor: '#F8FAFC',
-                    color: '#64748B',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '8px 6px',
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+
+                {/* Reticle Aiming Frame */}
+                <div
+                  style={{
+                    width: '180px',
+                    height: '180px',
+                    border: '2px dashed rgba(255, 255, 255, 0.45)',
+                    borderRadius: '16px',
+                    position: 'relative',
+                    zIndex: 2,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {/* Corner accents */}
+                  <div style={{ position: 'absolute', top: '-2px', left: '-2px', width: '20px', height: '20px', borderTop: '3px solid #E7A23B', borderLeft: '3px solid #E7A23B', borderTopLeftRadius: '6px' }} />
+                  <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '20px', height: '20px', borderTop: '3px solid #E7A23B', borderRight: '3px solid #E7A23B', borderTopRightRadius: '6px' }} />
+                  <div style={{ position: 'absolute', bottom: '-2px', left: '-2px', width: '20px', height: '20px', borderBottom: '3px solid #E7A23B', borderLeft: '3px solid #E7A23B', borderBottomLeftRadius: '6px' }} />
+                  <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '20px', height: '20px', borderBottom: '3px solid #E7A23B', borderRight: '3px solid #E7A23B', borderBottomRightRadius: '6px' }} />
+
+                  {/* Scanning sweep beam */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '8px',
+                      right: '8px',
+                      height: '2px',
+                      backgroundColor: '#38BDF8',
+                      boxShadow: '0 0 8px #38BDF8',
+                      animation: 'scanSweep 2s ease-in-out infinite',
+                    }}
+                  />
+                </div>
+
+                {/* Live Scanning Badge */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                    color: '#F8FAFC',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
                     fontSize: '0.74rem',
                     fontWeight: 600,
-                    cursor: isValidating ? 'not-allowed' : 'pointer',
-                  }}
-                  title="Test expired QR rejection"
-                >
-                  <RotateCcw size={13} />
-                  <span>Test Expired QR</span>
-                </button>
-
-                <button
-                  onClick={() => handleSimulateActiveScan('outside')}
-                  disabled={isValidating}
-                  style={{
+                    zIndex: 3,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px',
-                    backgroundColor: '#F8FAFC',
-                    color: '#64748B',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '8px 6px',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    cursor: isValidating ? 'not-allowed' : 'pointer',
+                    gap: '6px',
                   }}
-                  title="Test out-of-radius student rejection"
                 >
-                  <Compass size={13} />
-                  <span>Test Outside Area</span>
-                </button>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22C55E' }} />
+                  <span>Align QR inside frame</span>
+                </div>
               </div>
-            </>
-          ) : (
-            <button
-              onClick={handleClose}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                backgroundColor: '#243B7A',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px',
-                fontSize: '0.92rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              <span>Back to Portal</span>
-              <ArrowRight size={16} />
-            </button>
-          )}
-        </div>
+            )}
+
+            {/* Validation Spinner Overlay */}
+            {isValidating && (
+              <div
+                style={{
+                  padding: '12px',
+                  backgroundColor: '#EFF6FF',
+                  borderRadius: '10px',
+                  border: '1px solid #BFDBFE',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  marginBottom: '14px',
+                  color: '#1D4ED8',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                }}
+              >
+                <div
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid #BFDBFE',
+                    borderTopColor: '#1D4ED8',
+                    borderRadius: '50%',
+                    animation: 'spin 0.7s linear infinite',
+                  }}
+                />
+                <span>Validating attendance with server...</span>
+              </div>
+            )}
+
+            {/* Toggle Manual Entry */}
+            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowManualInput(!showManualInput)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#243B7A',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Keyboard size={14} />
+                <span>{showManualInput ? 'Hide manual code entry' : 'Trouble scanning? Enter code manually'}</span>
+              </button>
+            </div>
+
+            {/* Manual Code Input Form */}
+            {showManualInput && (
+              <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. VS-CS301-A1B2-C3D4 or scan link"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #CBD5E1',
+                    fontSize: '0.82rem',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={isValidating || !manualCode.trim()}
+                  style={{
+                    padding: '8px 14px',
+                    backgroundColor: '#243B7A',
+                    color: '#FFFFFF',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Verify
+                </button>
+              </form>
+            )}
+          </>
+        )}
       </div>
+
+      <style>{`
+        @keyframes scanSweep {
+          0% { top: 10px; }
+          50% { top: 168px; }
+          100% { top: 10px; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 };

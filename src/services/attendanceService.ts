@@ -6,7 +6,9 @@ export const QR_ROTATION_INTERVAL_MS = 5000; // 5-second rotation window default
 
 export interface QRTokenDetails {
   token: string;
+  masterToken: string;
   qrPayload: string;
+  qrUrl: string;
   windowIndex: number;
   expiresInSeconds: number;
   tokenGenerationTime: number;
@@ -29,6 +31,22 @@ export function generateTokenForWindow(
   return `VS-${courseCode}-${segment1}-${segment2}`;
 }
 
+/**
+ * Computes cryptographically secure, unpredictable master session token valid for the entire session duration
+ */
+export function generateSessionMasterToken(
+  sessionId: string,
+  courseCode: string,
+  teacherId: string,
+  salt: string
+): string {
+  const payload = `${sessionId}:${courseCode}:${teacherId}:${salt}:master_session`;
+  const hash = crypto.createHmac('sha256', salt).update(payload).digest('hex').toUpperCase();
+  const segment1 = hash.substring(0, 4);
+  const segment2 = hash.substring(4, 8);
+  return `VS-${courseCode}-${segment1}-${segment2}`;
+}
+
 export function getCurrentWindowIndex(intervalMs: number = QR_ROTATION_INTERVAL_MS): number {
   return Math.floor(Date.now() / intervalMs);
 }
@@ -43,19 +61,23 @@ export function getQRTokenDetails(
   const now = Date.now();
   const windowIndex = Math.floor(now / intervalMs);
   const token = generateTokenForWindow(sessionId, courseCode, teacherId, salt, windowIndex);
+  const masterToken = generateSessionMasterToken(sessionId, courseCode, teacherId, salt);
 
   const msIntoWindow = now % intervalMs;
   const expiresInSeconds = Math.max(1, Math.ceil((intervalMs - msIntoWindow) / 1000));
 
-  // Scannable JSON payload that contains only the session ID and short-lived rotating token
+  // Scannable payload that can be parsed as a URL or as JSON
+  const qrUrl = `/attendance/scan?sid=${sessionId}&token=${masterToken}`;
   const qrPayload = JSON.stringify({
     sid: sessionId,
-    tok: token,
+    tok: masterToken,
   });
 
   return {
     token,
+    masterToken,
     qrPayload,
+    qrUrl,
     windowIndex,
     expiresInSeconds,
     tokenGenerationTime: now - msIntoWindow,
@@ -498,9 +520,10 @@ export class AttendanceService {
 
     if (!session) return null;
 
-    // Check if session has exceeded configured max duration
+    // Check if session has exceeded configured max duration (2 minutes = 120s default)
     const settings = await this.getAttendanceSettings();
-    const maxDurationMs = (settings.session_duration_mins || 60) * 60 * 1000;
+    const durationMins = settings.session_duration_mins && settings.session_duration_mins <= 5 ? settings.session_duration_mins : 2;
+    const maxDurationMs = durationMins * 60 * 1000;
     const elapsedMs = Date.now() - new Date(session.started_at).getTime();
 
     if (session.is_active && elapsedMs > maxDurationMs) {
@@ -649,9 +672,10 @@ export class AttendanceService {
       };
     }
 
-    // Check maximum session duration
+    // Check maximum session duration (2 minutes = 120s default)
     const settings = await this.getAttendanceSettings();
-    const maxDurationMs = (settings.session_duration_mins || 60) * 60 * 1000;
+    const durationMins = settings.session_duration_mins && settings.session_duration_mins <= 5 ? settings.session_duration_mins : 2;
+    const maxDurationMs = durationMins * 60 * 1000;
     const elapsedMs = Date.now() - new Date(session.started_at).getTime();
     if (elapsedMs > maxDurationMs) {
       await prisma.attendanceSession.update({
@@ -661,11 +685,17 @@ export class AttendanceService {
       return {
         success: false,
         error: 'SESSION_EXPIRED',
-        message: 'Attendance session ended. The lecture attendance window has closed.',
+        message: 'Attendance session expired. Ask your faculty to generate a new QR.',
       };
     }
 
-    // 3. Cryptographic Token Validation (configured rotation window, default 5 seconds)
+    // 3. Cryptographic Token Validation (master session token OR rotating window token)
+    const masterToken = generateSessionMasterToken(
+      session.id,
+      session.course_code,
+      session.teacher_id,
+      session.secret_salt
+    );
     const intervalMs = (settings.qr_refresh_seconds || 5) * 1000;
     const currentWindow = Math.floor(Date.now() / intervalMs);
     const tokenCurrent = generateTokenForWindow(
@@ -684,10 +714,11 @@ export class AttendanceService {
     );
 
     const cleanToken = rawToken.trim().toUpperCase();
+    const isMasterValid = cleanToken === masterToken;
     const isCurrentValid = cleanToken === tokenCurrent;
     const isPreviousValid = cleanToken === tokenPrevious;
 
-    if (!isCurrentValid && !isPreviousValid) {
+    if (!isMasterValid && !isCurrentValid && !isPreviousValid) {
       return {
         success: false,
         error: 'TOKEN_EXPIRED',
@@ -746,7 +777,7 @@ export class AttendanceService {
         success: false,
         duplicate: true,
         error: 'ALREADY_MARKED',
-        message: 'Attendance is already marked for this class.',
+        message: 'Attendance already marked for this session.',
         session: {
           courseName: session.course_name,
           courseCode: session.course_code,

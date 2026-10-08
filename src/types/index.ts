@@ -89,8 +89,10 @@ export interface DynamicSessionState {
   expiresInSeconds: number;
   remainingSessionSeconds?: number;
   currentToken: string;
+  masterToken?: string;
   token?: string;
   qrPayload?: string;
+  qrUrl?: string;
   tokenGenerationTime: number;
   presentCount: number;
   totalEnrolled: number;

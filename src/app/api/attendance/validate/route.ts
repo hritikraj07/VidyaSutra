@@ -36,15 +36,35 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     let { sessionId, token, rawScan, latitude, longitude, accuracy } = body;
 
-    // Support scanned JSON string directly from camera QR
-    if (rawScan && typeof rawScan === 'string') {
-      try {
-        const parsed = JSON.parse(rawScan);
-        if (parsed.sid) sessionId = parsed.sid;
-        if (parsed.tok) token = parsed.tok;
-      } catch {
-        // If not JSON, it might be the raw token
-        if (!token) token = rawScan;
+    // Support scanned JSON string or URL directly from camera QR
+    const scanInput = rawScan || token;
+    if (scanInput && typeof scanInput === 'string') {
+      const trimmed = scanInput.trim();
+      // Case A: JSON string
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed.sid) sessionId = parsed.sid;
+          if (parsed.tok) token = parsed.tok;
+          if (parsed.token) token = parsed.token;
+        } catch {}
+      }
+      // Case B: URL or Query String
+      else if (trimmed.includes('?') || trimmed.includes('/attendance/scan') || trimmed.startsWith('http')) {
+        try {
+          let urlObj: URL | null = null;
+          try {
+            urlObj = new URL(trimmed);
+          } catch {
+            urlObj = new URL(`http://localhost${trimmed.startsWith('/') ? '' : '/'}${trimmed}`);
+          }
+          if (urlObj) {
+            const uSid = urlObj.searchParams.get('sid') || urlObj.searchParams.get('session_id');
+            const uTok = urlObj.searchParams.get('token') || urlObj.searchParams.get('session');
+            if (uSid) sessionId = uSid;
+            if (uTok) token = uTok;
+          }
+        } catch {}
       }
     }
 

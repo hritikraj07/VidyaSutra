@@ -246,6 +246,73 @@ export const StudentDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* 1.5 Scan Attendance Feature Card (Section 7) */}
+      <section style={{ marginBottom: '20px' }}>
+        <div
+          className="vs-card"
+          style={{
+            background: 'linear-gradient(135deg, #172554 0%, #1E3A8A 100%)',
+            borderRadius: '16px',
+            padding: '20px 24px',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '16px',
+            boxShadow: '0 8px 24px -4px rgba(23, 37, 84, 0.25)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '14px',
+                backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                flexShrink: 0,
+              }}
+            >
+              <QrCode size={28} color="#FDE047" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.18rem', fontWeight: 800, margin: '0 0 4px 0', color: '#FFFFFF' }}>
+                📷 Scan Attendance
+              </h3>
+              <p style={{ fontSize: '0.84rem', margin: 0, color: '#CBD5E1', maxWidth: '440px', lineHeight: 1.4 }}>
+                Scan your faculty's QR code to mark today's attendance.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsQrScannerOpen(true)}
+            style={{
+              backgroundColor: '#F59E0B',
+              color: '#0F172A',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '12px 24px',
+              fontSize: '0.92rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+              transition: 'transform 0.15s ease',
+            }}
+          >
+            <QrCode size={18} />
+            <span>Open Scanner</span>
+          </button>
+        </div>
+      </section>
+
       {/* 2. Primary Academic Intelligence Overview (4 Pillars) */}
       <section style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
