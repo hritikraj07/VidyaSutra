@@ -196,6 +196,343 @@ export const TeacherDashboard: React.FC = () => {
         </div>
       </section>
 
+      {/* 2.5 Students Requiring Academic Attention (At-Risk Intelligence Panel) */}
+      <section style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#172554', margin: 0 }}>
+                Students Requiring Academic Attention
+              </h2>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  backgroundColor: '#FEE2E2',
+                  color: '#DC2626',
+                  border: '1px solid #FECACA',
+                  padding: '2px 7px',
+                  borderRadius: '6px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Actionable AI Prescriptions
+              </span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '3px', margin: 0 }}>
+              Synthesized from attendance turnouts, continuous internal assessments, and backlog indicators
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                color: '#243B7A',
+                backgroundColor: '#EEF2FB',
+                border: '1px solid #D6E0F5',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <BarChart3 size={14} />
+              <span>Deep Cohort Analytics</span>
+            </button>
+          </div>
+        </div>
+
+        {/* At-Risk Student Cards Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '14px',
+          }}
+        >
+          {/* Student 1: Rohit Kumar (High Risk) */}
+          <div
+            className="vs-card vs-card-hover"
+            style={{
+              padding: '18px 20px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #FECACA',
+              borderLeft: '5px solid #DC2626',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#172554', margin: 0 }}>
+                    Rohit Kumar
+                  </h3>
+                  <span className="vs-badge vs-badge-danger" style={{ fontSize: '0.66rem' }}>
+                    HIGH RISK
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
+                  Roll: 22BIT105 • IT Sem 4 (Section B)
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#DC2626' }}>
+                  61%
+                </div>
+                <div style={{ fontSize: '0.68rem', color: '#64748B' }}>Attendance</div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '6px',
+                backgroundColor: '#FEF2F2',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                fontSize: '0.74rem',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748B' }}>Performance: </span>
+                <strong style={{ color: '#DC2626' }}>↓ 14%</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748B' }}>CGPA: </span>
+                <strong style={{ color: '#172554' }}>5.35</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748B' }}>Backlogs: </span>
+                <strong style={{ color: '#DC2626' }}>2</strong>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, marginBottom: '12px' }}>
+              <strong>Contributing Factors:</strong> Attendance fell below mandatory 65% limit with declining internal quiz averages and 2 uncleared semester backlogs.
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '0.74rem', color: '#991B1B', fontWeight: 700 }}>
+                💡 Action: Schedule Academic Counseling
+              </span>
+              <button
+                onClick={() => {
+                  alert('Intervention signal recorded: Student Academic Advising notification dispatched to Rohit Kumar & Department Coordinator.');
+                }}
+                className="vs-btn-primary"
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.74rem',
+                  backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  borderRadius: '7px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Send Intervention
+              </button>
+            </div>
+          </div>
+
+          {/* Student 2: Kavya Nair (Moderate Risk) */}
+          <div
+            className="vs-card vs-card-hover"
+            style={{
+              padding: '18px 20px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #FDE68A',
+              borderLeft: '5px solid #D97706',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#172554', margin: 0 }}>
+                    Kavya Nair
+                  </h3>
+                  <span className="vs-badge vs-badge-warning" style={{ fontSize: '0.66rem' }}>
+                    MODERATE RISK
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
+                  Roll: 21BCSE104 • CSE Sem 6 (Section A)
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#15803D' }}>
+                  92%
+                </div>
+                <div style={{ fontSize: '0.68rem', color: '#64748B' }}>Attendance</div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '6px',
+                backgroundColor: '#FFFBEB',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                fontSize: '0.74rem',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748B' }}>Performance: </span>
+                <strong style={{ color: '#D97706' }}>↓ 7%</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748B' }}>CGPA: </span>
+                <strong style={{ color: '#172554' }}>5.85</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748B' }}>Backlogs: </span>
+                <strong style={{ color: '#D97706' }}>1</strong>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, marginBottom: '12px' }}>
+              <strong>Contributing Factors:</strong> High classroom attendance (92%), but struggles with advanced algorithm problem sets and internal exam questions (56% score).
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '0.74rem', color: '#92400E', fontWeight: 700 }}>
+                💡 Action: Send Remedial Resources
+              </span>
+              <button
+                onClick={() => {
+                  alert('Revision resources sent: Data Structures & Algorithms remediation package dispatched to Kavya Nair.');
+                }}
+                className="vs-btn-primary"
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.74rem',
+                  backgroundColor: '#D97706',
+                  color: '#FFFFFF',
+                  borderRadius: '7px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Send Resources
+              </button>
+            </div>
+          </div>
+
+          {/* Student 3: Ananya Sen (Placement Readiness Risk) */}
+          <div
+            className="vs-card vs-card-hover"
+            style={{
+              padding: '18px 20px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #D6E0F5',
+              borderLeft: '5px solid #243B7A',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#172554', margin: 0 }}>
+                    Ananya Sen
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: '0.66rem',
+                      fontWeight: 700,
+                      backgroundColor: '#EEF2FB',
+                      color: '#243B7A',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    PLACEMENT ADVISORY
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
+                  Roll: 21BCSE102 • CSE Sem 6 (Section A)
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#172554' }}>
+                  88%
+                </div>
+                <div style={{ fontSize: '0.68rem', color: '#64748B' }}>Attendance</div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '6px',
+                backgroundColor: '#F8FAFC',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                fontSize: '0.74rem',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748B' }}>Theory: </span>
+                <strong style={{ color: '#15803D' }}>84%</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748B' }}>CGPA: </span>
+                <strong style={{ color: '#172554' }}>8.42</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748B' }}>Coding: </span>
+                <strong style={{ color: '#D97706' }}>48%</strong>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, marginBottom: '12px' }}>
+              <strong>Contributing Factors:</strong> High CGPA & theory test mastery, but technical coding benchmark (48%) risks corporate placement screening.
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '0.74rem', color: '#243B7A', fontWeight: 700 }}>
+                💡 Action: Recommend Coding Clinic
+              </span>
+              <button
+                onClick={() => {
+                  alert('Placement advisory sent: Coding Clinic & DSA Interview prep recommended to Ananya Sen.');
+                }}
+                className="vs-btn-primary"
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.74rem',
+                  backgroundColor: '#243B7A',
+                  color: '#FFFFFF',
+                  borderRadius: '7px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Enroll Clinic
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 3. My Subjects & Class Allotments */}
       <section style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>

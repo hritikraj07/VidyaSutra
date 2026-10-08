@@ -135,6 +135,69 @@ export default function LoginPage() {
     }
   };
 
+  const [judgeDemoLoadingRole, setJudgeDemoLoadingRole] = useState<string | null>(null);
+
+  // Instant 1-Click Judge Demo Authenticated Launch
+  const handleLaunchJudgeDemo = async (demoRole: 'student' | 'teacher' | 'admin') => {
+    setErrorMsg('');
+    setJudgeDemoLoadingRole(demoRole);
+    setIsLoading(true);
+
+    let targetEmail = 'student@vidyasutra.edu.in';
+    const targetPassword = 'VidyaSutra#2026!';
+    let targetPortalRole: UserRole = 'student';
+
+    if (demoRole === 'student') {
+      targetEmail = 'student@vidyasutra.edu.in';
+      targetPortalRole = 'student';
+    } else if (demoRole === 'teacher') {
+      targetEmail = 'faculty@vidyasutra.edu.in';
+      targetPortalRole = 'teacher';
+    } else {
+      targetEmail = 'admin@vidyasutra.edu.in';
+      targetPortalRole = 'teacher'; // Admin authenticates via Teacher/Staff portal
+    }
+
+    setRole(targetPortalRole);
+    setEmail(targetEmail);
+    setPassword(targetPassword);
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'login',
+          email: targetEmail,
+          password: targetPassword,
+          role: targetPortalRole,
+        }),
+      });
+
+      const resData = await res.json();
+
+      if (res.ok && resData.success) {
+        try {
+          await supabase.auth.signInWithPassword({
+            email: targetEmail,
+            password: targetPassword,
+          });
+        } catch {}
+
+        router.push('/');
+        router.refresh();
+      } else {
+        setErrorMsg(resData.error || 'Failed to authenticate demo session.');
+        setIsLoading(false);
+        setJudgeDemoLoadingRole(null);
+      }
+    } catch {
+      setErrorMsg('Network error authenticating judge demo session.');
+      setIsLoading(false);
+      setJudgeDemoLoadingRole(null);
+    }
+  };
+
   // Quick Demo Autofill Helper for Hackathon Evaluators
   const fillDemoAccount = (demoRole: 'student' | 'teacher' | 'admin') => {
     setErrorMsg('');
@@ -684,13 +747,13 @@ export default function LoginPage() {
             </div>
           </form>
 
-          {/* Quick Demo Access Pills for Hackathon Judges (Discreet & Instant) */}
+          {/* Prominent Hackathon Evaluator 1-Click Judge Demo Experience */}
           <div
             className="animate-form-stagger-4"
             style={{
               marginTop: '16px',
-              paddingTop: '12px',
-              borderTop: '1px solid #F1F5F9',
+              paddingTop: '14px',
+              borderTop: '1px solid #E2E8F0',
             }}
           >
             <div
@@ -698,115 +761,236 @@ export default function LoginPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '8px',
+                marginBottom: '10px',
               }}
             >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Sparkles size={13} color="#E7A23B" />
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    color: '#172554',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  ENTER JUDGE DEMO (1-CLICK EVALUATION)
+                </span>
+              </div>
               <span
                 style={{
-                  fontSize: '0.67rem',
+                  fontSize: '0.62rem',
                   fontWeight: 700,
-                  color: '#64748B',
-                  letterSpacing: '0.04em',
+                  backgroundColor: '#DCFCE7',
+                  color: '#15803D',
+                  border: '1px solid #BBF7D0',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
                   textTransform: 'uppercase',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
                 }}
               >
-                <Sparkles size={11} color="#E7A23B" />
-                Demo Credentials Fill:
+                Zero-Friction
               </span>
             </div>
 
+            {/* 3 Prominent 1-Click Persona Launch Buttons */}
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '6px',
+                gap: '8px',
+                marginBottom: '10px',
               }}
             >
               <button
                 type="button"
-                onClick={() => fillDemoAccount('student')}
-                title="Fill Student credentials (Student)"
+                onClick={() => handleLaunchJudgeDemo('student')}
+                disabled={isLoading}
+                title="Launch demo as Student (Aarav Sharma, Roll 21BCSE101)"
                 style={{
-                  padding: '5px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#F8FAFC',
+                  padding: '8px 6px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #CBD5E1',
+                  backgroundColor: judgeDemoLoadingRole === 'student' ? '#EEF2FB' : '#FFFFFF',
                   color: '#172554',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s ease',
                   textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '3px',
+                  boxShadow: '0 2px 4px rgba(15, 23, 42, 0.04)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#EEF2FB';
-                  e.currentTarget.style.borderColor = '#243B7A';
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = '#EEF2FB';
+                    e.currentTarget.style.borderColor = '#243B7A';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F8FAFC';
-                  e.currentTarget.style.borderColor = '#CBD5E1';
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                    e.currentTarget.style.borderColor = '#CBD5E1';
+                    e.currentTarget.style.transform = 'none';
+                  }
                 }}
               >
-                🎓 Student
+                <span style={{ fontSize: '1rem' }}>🎓</span>
+                <span style={{ color: '#243B7A' }}>Student</span>
+                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Aarav Sharma</span>
               </button>
 
+              <button
+                type="button"
+                onClick={() => handleLaunchJudgeDemo('teacher')}
+                disabled={isLoading}
+                title="Launch demo as Faculty (Dr. Ramesh Verma)"
+                style={{
+                  padding: '8px 6px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #CBD5E1',
+                  backgroundColor: judgeDemoLoadingRole === 'teacher' ? '#EEF2FB' : '#FFFFFF',
+                  color: '#172554',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '3px',
+                  boxShadow: '0 2px 4px rgba(15, 23, 42, 0.04)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = '#EEF2FB';
+                    e.currentTarget.style.borderColor = '#243B7A';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                    e.currentTarget.style.borderColor = '#CBD5E1';
+                    e.currentTarget.style.transform = 'none';
+                  }
+                }}
+              >
+                <span style={{ fontSize: '1rem' }}>👨‍🏫</span>
+                <span style={{ color: '#243B7A' }}>Faculty</span>
+                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Dr. Ramesh</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleLaunchJudgeDemo('admin')}
+                disabled={isLoading}
+                title="Launch demo as Administrator"
+                style={{
+                  padding: '8px 6px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #CBD5E1',
+                  backgroundColor: judgeDemoLoadingRole === 'admin' ? '#EEF2FB' : '#FFFFFF',
+                  color: '#172554',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '3px',
+                  boxShadow: '0 2px 4px rgba(15, 23, 42, 0.04)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = '#EEF2FB';
+                    e.currentTarget.style.borderColor = '#243B7A';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                    e.currentTarget.style.borderColor = '#CBD5E1';
+                    e.currentTarget.style.transform = 'none';
+                  }
+                }}
+              >
+                <span style={{ fontSize: '1rem' }}>🛡️</span>
+                <span style={{ color: '#243B7A' }}>Admin</span>
+                <span style={{ fontSize: '0.62rem', color: '#64748B', fontWeight: 500 }}>Administrator</span>
+              </button>
+            </div>
+
+            {/* Manual Autofill Pills */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontSize: '0.68rem',
+                color: '#64748B',
+              }}
+            >
+              <span>Or autofill form:</span>
+              <button
+                type="button"
+                onClick={() => fillDemoAccount('student')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#243B7A',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  padding: 0,
+                  fontSize: '0.68rem',
+                }}
+              >
+                Student
+              </button>
+              <span>•</span>
               <button
                 type="button"
                 onClick={() => fillDemoAccount('teacher')}
-                title="Fill Faculty credentials (Dr. Ramesh Verma)"
                 style={{
-                  padding: '5px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#F8FAFC',
-                  color: '#172554',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
+                  background: 'none',
+                  border: 'none',
+                  color: '#243B7A',
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  textAlign: 'center',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#EEF2FB';
-                  e.currentTarget.style.borderColor = '#243B7A';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F8FAFC';
-                  e.currentTarget.style.borderColor = '#CBD5E1';
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  padding: 0,
+                  fontSize: '0.68rem',
                 }}
               >
-                📖 Teacher
+                Teacher
               </button>
-
+              <span>•</span>
               <button
                 type="button"
                 onClick={() => fillDemoAccount('admin')}
-                title="Fill Administrator credentials"
                 style={{
-                  padding: '5px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#F8FAFC',
-                  color: '#172554',
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
+                  background: 'none',
+                  border: 'none',
+                  color: '#243B7A',
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  textAlign: 'center',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#EEF2FB';
-                  e.currentTarget.style.borderColor = '#243B7A';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F8FAFC';
-                  e.currentTarget.style.borderColor = '#CBD5E1';
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  padding: 0,
+                  fontSize: '0.68rem',
                 }}
               >
-                🛡️ Admin
+                Admin
               </button>
             </div>
           </div>
