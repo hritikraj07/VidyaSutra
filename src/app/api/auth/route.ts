@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err: any) {
     const isNotFound = err.message?.includes('not found') || err.message?.includes('Account not found');
-    const isInvalidCreds = err.message?.includes('Invalid credentials') || err.message?.includes('password');
+    const isInvalidCreds = err.message?.includes('Invalid credentials') || err.message?.includes('verify your password');
     const isAccessDenied = err.message?.includes('Access denied');
     const status = isNotFound ? 404 : isAccessDenied ? 403 : isInvalidCreds ? 401 : err.message?.includes('already exists') ? 409 : 400;
     return NextResponse.json(

@@ -120,9 +120,8 @@ export default function LoginPage() {
           setErrorMsg('Account not found. Please verify your email or contact your institutional administrator.');
         } else if (
           res.status === 401 ||
-          resData.error?.includes('Invalid') ||
-          resData.error?.includes('credentials') ||
-          resData.error?.includes('password')
+          resData.error?.includes('Invalid credentials') ||
+          resData.error?.includes('verify your password')
         ) {
           setErrorMsg('Invalid credentials. Please verify your password.');
         } else {
