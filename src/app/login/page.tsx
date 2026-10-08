@@ -25,15 +25,6 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
-  // Enforce zero page-level scrolling (single viewport fit)
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
-    };
-  }, []);
 
   // Form Fields
   const [email, setEmail] = useState('');
@@ -222,16 +213,16 @@ export default function LoginPage() {
       id="main-content"
       style={{
         position: 'relative',
-        height: '100vh',
-        maxHeight: '100vh',
-        width: '100vw',
+        minHeight: '100vh',
+        width: '100%',
         maxWidth: '100vw',
-        overflow: 'hidden',
+        overflowY: 'auto',
+        overflowX: 'hidden',
         backgroundColor: '#0F172A', // Deep Midnight base fallback
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px',
+        padding: '24px 16px',
         boxSizing: 'border-box',
         color: '#172033', // Ink
       }}
@@ -266,11 +257,11 @@ export default function LoginPage() {
           zIndex: 10,
           width: '100%',
           maxWidth: '430px',
-          maxHeight: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
+          margin: 'auto 0',
         }}
       >
         {/* Prominent Official Logo with White Badge Frame & One-Time Light Sweep */}
