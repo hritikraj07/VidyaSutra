@@ -3,6 +3,8 @@ import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { AttendanceService } from '@/services/attendanceService';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser(request);

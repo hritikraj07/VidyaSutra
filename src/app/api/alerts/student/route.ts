@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
+export const dynamic = 'force-dynamic';
+
 // In-memory alert log for faculty & coordinator interventions during active runtime
 const activeAlerts: Array<{
   id: string;

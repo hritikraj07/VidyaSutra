@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { normalizeRoleToUi } from '@/lib/auth';
 import { getProfileFromSupabase } from '@/lib/supabaseAdmin';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const sessionCookie = request.cookies.get('vidyasutra_session')?.value;
   if (!sessionCookie) {

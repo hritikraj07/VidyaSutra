@@ -9,6 +9,8 @@ import {
 import { hashPassword, normalizeRoleToDb, normalizeRoleToUi } from '@/lib/auth';
 import crypto from 'crypto';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // 1. Server-side admin verification
