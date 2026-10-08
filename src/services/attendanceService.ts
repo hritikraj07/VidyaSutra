@@ -520,9 +520,9 @@ export class AttendanceService {
 
     if (!session) return null;
 
-    // Check if session has exceeded configured max duration (2 minutes = 120s default)
+    // Check if session has exceeded configured max duration (default 60 mins)
     const settings = await this.getAttendanceSettings();
-    const durationMins = settings.session_duration_mins && settings.session_duration_mins <= 5 ? settings.session_duration_mins : 2;
+    const durationMins = settings.session_duration_mins && settings.session_duration_mins > 0 ? settings.session_duration_mins : 60;
     const maxDurationMs = durationMins * 60 * 1000;
     const elapsedMs = Date.now() - new Date(session.started_at).getTime();
 
@@ -623,8 +623,8 @@ export class AttendanceService {
    */
   static async validateAndMarkAttendance(
     student: AuthenticatedUser,
-    sessionId: string,
-    rawToken: string,
+    sessionId?: string,
+    rawToken?: string,
     studentLocation?: {
       latitude?: number;
       longitude?: number;
@@ -640,41 +640,78 @@ export class AttendanceService {
       };
     }
 
-    if (!sessionId || !rawToken) {
+    const cleanToken = (rawToken || '').trim().toUpperCase();
+    const cleanSessionId = (sessionId || '').trim();
+
+    if (!cleanSessionId && !cleanToken) {
       return {
         success: false,
         error: 'INVALID_PAYLOAD',
-        message: 'Attendance session ID and token are required.',
+        message: 'This is not a valid VidyaSutra attendance QR.',
       };
     }
 
     // 2. Fetch session from database
-    const session = await prisma.attendanceSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        teacher: { select: { name: true } },
-      },
-    });
+    let session = null;
+    if (cleanSessionId) {
+      session = await prisma.attendanceSession.findUnique({
+        where: { id: cleanSessionId },
+        include: {
+          teacher: { select: { name: true } },
+        },
+      });
+    }
+
+    // If not found by direct id (e.g. if token was passed as session identifier or sessionId was omitted),
+    // look up among active sessions by token matching
+    if (!session) {
+      const activeSessions = await prisma.attendanceSession.findMany({
+        where: { is_active: true, status: 'ACTIVE' },
+        include: {
+          teacher: { select: { name: true } },
+        },
+        orderBy: { started_at: 'desc' },
+      });
+
+      for (const s of activeSessions) {
+        const mTok = generateSessionMasterToken(s.id, s.course_code, s.teacher_id, s.secret_salt);
+        const curWindow = getCurrentWindowIndex();
+        const curTok = generateTokenForWindow(s.id, s.course_code, s.teacher_id, s.secret_salt, curWindow);
+        const prevTok = generateTokenForWindow(s.id, s.course_code, s.teacher_id, s.secret_salt, curWindow - 1);
+        const candidate = cleanToken || cleanSessionId.toUpperCase();
+
+        if (
+          candidate === mTok ||
+          candidate === curTok ||
+          candidate === prevTok ||
+          s.id === cleanSessionId ||
+          s.id === cleanToken
+        ) {
+          session = s;
+          break;
+        }
+      }
+    }
 
     if (!session) {
       return {
         success: false,
-        error: 'SESSION_NOT_FOUND',
-        message: 'Invalid class/session. Attendance session not found.',
+        error: 'INVALID_QR',
+        message: 'This is not a valid VidyaSutra attendance QR.',
       };
     }
 
     if (!session.is_active || session.status !== 'ACTIVE') {
       return {
         success: false,
-        error: 'SESSION_INACTIVE',
-        message: 'Attendance session ended. This class session is no longer accepting attendance.',
+        error: 'SESSION_EXPIRED',
+        message: 'Attendance session expired or ended. Ask your faculty to generate a new QR.',
       };
     }
 
-    // Check maximum session duration (2 minutes = 120s default)
+    // Check maximum session duration
     const settings = await this.getAttendanceSettings();
-    const durationMins = settings.session_duration_mins && settings.session_duration_mins <= 5 ? settings.session_duration_mins : 2;
+    const durationMins = settings.session_duration_mins && settings.session_duration_mins > 0 ? settings.session_duration_mins : 60;
     const maxDurationMs = durationMins * 60 * 1000;
     const elapsedMs = Date.now() - new Date(session.started_at).getTime();
     if (elapsedMs > maxDurationMs) {
@@ -713,16 +750,16 @@ export class AttendanceService {
       currentWindow - 1
     );
 
-    const cleanToken = rawToken.trim().toUpperCase();
     const isMasterValid = cleanToken === masterToken;
     const isCurrentValid = cleanToken === tokenCurrent;
     const isPreviousValid = cleanToken === tokenPrevious;
+    const isSessionIdValid = cleanToken === session.id || cleanSessionId === session.id;
 
-    if (!isMasterValid && !isCurrentValid && !isPreviousValid) {
+    if (!isMasterValid && !isCurrentValid && !isPreviousValid && !isSessionIdValid) {
       return {
         success: false,
-        error: 'TOKEN_EXPIRED',
-        message: 'Attendance could not be marked because the QR code has expired. Please scan the current QR.',
+        error: 'SESSION_EXPIRED',
+        message: 'Attendance session expired. Ask your faculty to generate a new QR.',
       };
     }
 
@@ -757,8 +794,8 @@ export class AttendanceService {
     if (!hasCourseAllotment && !isSectionMatch) {
       return {
         success: false,
-        error: 'NOT_ENROLLED',
-        message: `You are not enrolled in ${session.course_name} (${session.section}). Attendance rejected.`,
+        error: 'WRONG_CLASS',
+        message: 'This attendance session is not available for your class.',
       };
     }
 
@@ -776,8 +813,13 @@ export class AttendanceService {
       return {
         success: false,
         duplicate: true,
+        reason: 'ALREADY_MARKED',
         error: 'ALREADY_MARKED',
         message: 'Attendance already marked for this session.',
+        subject: session.course_name,
+        faculty: session.teacher.name,
+        time: existingRecord.marked_at.toISOString(),
+        status: 'PRESENT',
         session: {
           courseName: session.course_name,
           courseCode: session.course_code,
@@ -793,30 +835,22 @@ export class AttendanceService {
       typeof session.teacher_latitude === 'number' &&
       typeof session.teacher_longitude === 'number';
 
-    if (hasTeacherLocation) {
-      const sLat = studentLocation?.latitude;
-      const sLon = studentLocation?.longitude;
-      const sAcc = studentLocation?.accuracy;
+    const sLat = studentLocation?.latitude;
+    const sLon = studentLocation?.longitude;
+    const sAcc = studentLocation?.accuracy;
 
-      if (typeof sLat !== 'number' || typeof sLon !== 'number') {
-        return {
-          success: false,
-          error: 'LOCATION_UNAVAILABLE',
-          message:
-            'Attendance could not be marked because location is unavailable. Please enable device location and scan again.',
-        };
-      }
+    // Check GPS accuracy if provided: reject clearly unreliable readings (> 100m)
+    if (typeof sAcc === 'number' && sAcc > 100) {
+      return {
+        success: false,
+        error: 'UNRELIABLE_LOCATION',
+        message:
+          'Location accuracy is too low to verify classroom presence (GPS drift > 100m). Please wait for an accurate GPS reading and try again.',
+      };
+    }
 
-      // Check GPS accuracy: reject clearly unreliable location readings
-      if (typeof sAcc === 'number' && sAcc > 100) {
-        return {
-          success: false,
-          error: 'UNRELIABLE_LOCATION',
-          message:
-            'Location accuracy is too low to verify classroom presence (GPS drift > 100m). Please wait for an accurate GPS reading and try again.',
-        };
-      }
-
+    // If both student coordinates and teacher coordinates are available, calculate distance
+    if (hasTeacherLocation && typeof sLat === 'number' && typeof sLon === 'number') {
       calculatedDistance = calculateHaversineDistanceMeters(
         session.teacher_latitude!,
         session.teacher_longitude!,
@@ -844,12 +878,12 @@ export class AttendanceService {
           student_id: student.id,
           student_name: student.name,
           roll_no: studentProfile.roll_no,
-          token_used: cleanToken,
+          token_used: cleanToken || cleanSessionId,
           status: 'PRESENT',
           source: 'qr',
-          student_latitude: studentLocation?.latitude || null,
-          student_longitude: studentLocation?.longitude || null,
-          gps_accuracy: studentLocation?.accuracy || null,
+          student_latitude: studentLocation?.latitude ?? null,
+          student_longitude: studentLocation?.longitude ?? null,
+          gps_accuracy: studentLocation?.accuracy ?? null,
           distance_from_teacher: calculatedDistance,
           teacher_id: session.teacher_id,
           marked_at: new Date(),
@@ -862,7 +896,11 @@ export class AttendanceService {
 
       return {
         success: true,
-        message: 'Attendance marked successfully',
+        message: 'Attendance Marked Successfully',
+        subject: session.course_name,
+        faculty: session.teacher.name,
+        time: record.marked_at.toISOString(),
+        status: 'PRESENT',
         details: {
           teacher: session.teacher.name,
           course: session.course_name,
@@ -874,7 +912,7 @@ export class AttendanceService {
           rollNo: studentProfile.roll_no,
           status: 'PRESENT',
           source: 'qr',
-          verification: 'QR + Location',
+          verification: calculatedDistance !== null ? 'QR + Location' : 'Secure QR Verification',
           distanceMeters: calculatedDistance,
           markedAt: record.marked_at.toISOString(),
           presentCount: totalPresent,
@@ -885,8 +923,12 @@ export class AttendanceService {
         return {
           success: false,
           duplicate: true,
+          reason: 'ALREADY_MARKED',
           error: 'ALREADY_MARKED',
-          message: 'Attendance is already marked for this class.',
+          message: 'Attendance already marked for this session.',
+          subject: session.course_name,
+          faculty: session.teacher.name,
+          status: 'PRESENT',
         };
       }
       throw err;

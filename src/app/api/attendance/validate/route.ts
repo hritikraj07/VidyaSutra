@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'UNAUTHENTICATED',
-          message: 'You must be logged in as an institutional student to mark attendance.',
+          message: 'Please sign in as a student before scanning attendance.',
         },
         { status: 401 }
       );
@@ -34,10 +34,10 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse scanned payload and student geolocation
     const body = await request.json().catch(() => ({}));
-    let { sessionId, token, rawScan, latitude, longitude, accuracy } = body;
+    let { sessionId, token, sessionToken, rawScan, qrPayload, latitude, longitude, accuracy } = body;
 
-    // Support scanned JSON string or URL directly from camera QR
-    const scanInput = rawScan || token;
+    // Support scanned JSON string, sessionToken, or URL directly from camera QR
+    const scanInput = sessionToken || rawScan || qrPayload || token;
     if (scanInput && typeof scanInput === 'string') {
       const trimmed = scanInput.trim();
       // Case A: JSON string
@@ -45,8 +45,14 @@ export async function POST(request: NextRequest) {
         try {
           const parsed = JSON.parse(trimmed);
           if (parsed.sid) sessionId = parsed.sid;
+          if (parsed.sessionId) sessionId = parsed.sessionId;
           if (parsed.tok) token = parsed.tok;
           if (parsed.token) token = parsed.token;
+          if (parsed.sessionToken) token = parsed.sessionToken;
+          if (parsed.session) {
+            if (!token) token = parsed.session;
+            if (!sessionId) sessionId = parsed.session;
+          }
         } catch {}
       }
       // Case B: URL or Query String
@@ -59,21 +65,27 @@ export async function POST(request: NextRequest) {
             urlObj = new URL(`http://localhost${trimmed.startsWith('/') ? '' : '/'}${trimmed}`);
           }
           if (urlObj) {
-            const uSid = urlObj.searchParams.get('sid') || urlObj.searchParams.get('session_id');
-            const uTok = urlObj.searchParams.get('token') || urlObj.searchParams.get('session');
+            const uSid = urlObj.searchParams.get('sid') || urlObj.searchParams.get('session_id') || urlObj.searchParams.get('session');
+            const uTok = urlObj.searchParams.get('token') || urlObj.searchParams.get('tok') || urlObj.searchParams.get('sessionToken') || urlObj.searchParams.get('session');
             if (uSid) sessionId = uSid;
             if (uTok) token = uTok;
           }
         } catch {}
+      } else {
+        if (!token) token = trimmed;
       }
     }
 
-    if (!sessionId || !token) {
+    if (!token && sessionToken) {
+      token = sessionToken;
+    }
+
+    if (!sessionId && !token) {
       return NextResponse.json(
         {
           success: false,
           error: 'MISSING_PAYLOAD',
-          message: 'Scanned QR token and session ID are required.',
+          message: 'This is not a valid VidyaSutra attendance QR.',
         },
         { status: 400 }
       );
@@ -94,10 +106,12 @@ export async function POST(request: NextRequest) {
     );
 
     if (!result.success) {
-      const statusCode = result.duplicate
+      const statusCode = result.duplicate || result.reason === 'ALREADY_MARKED'
         ? 409
-        : result.error === 'NOT_ENROLLED' || result.error === 'UNAUTHORIZED_ROLE'
+        : result.error === 'WRONG_CLASS' || result.error === 'NOT_ENROLLED' || result.error === 'UNAUTHORIZED_ROLE'
         ? 403
+        : result.error === 'UNAUTHENTICATED'
+        ? 401
         : 400;
       return NextResponse.json(result, { status: statusCode });
     }

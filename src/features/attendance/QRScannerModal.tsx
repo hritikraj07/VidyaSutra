@@ -31,6 +31,7 @@ export const QRScannerModal: React.FC = () => {
   } = useApp();
 
   const [isValidating, setIsValidating] = useState(false);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
@@ -49,6 +50,7 @@ export const QRScannerModal: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isProcessingScanRef = useRef(false);
 
   // Optional Geolocation request
   const requestStudentLocation = useCallback((): Promise<{
@@ -170,11 +172,19 @@ export const QRScannerModal: React.FC = () => {
     };
   }, [isQrScannerOpen, startCamera, requestStudentLocation, resetLastScanResult]);
 
+  const handleScanAgain = useCallback(() => {
+    isProcessingScanRef.current = false;
+    setIsProcessingScan(false);
+    resetLastScanResult();
+    startCamera();
+  }, [resetLastScanResult, startCamera]);
+
   // Main Handle Scan Payload
   const handleScanPayload = useCallback(
     async (rawPayload: string) => {
       if (isValidating) return;
       setIsValidating(true);
+      setIsProcessingScan(true);
       resetLastScanResult();
 
       try {
@@ -191,8 +201,14 @@ export const QRScannerModal: React.FC = () => {
           try {
             const parsed = JSON.parse(token);
             if (parsed.sid) sessionId = parsed.sid;
+            if (parsed.sessionId) sessionId = parsed.sessionId;
             if (parsed.tok) token = parsed.tok;
             if (parsed.token) token = parsed.token;
+            if (parsed.sessionToken) token = parsed.sessionToken;
+            if (parsed.session) {
+              if (!token || token.startsWith('{')) token = parsed.session;
+              if (!sessionId) sessionId = parsed.session;
+            }
           } catch {}
         }
         // 2. Check if URL payload: https://.../attendance/scan?sid=...&token=...
@@ -206,7 +222,7 @@ export const QRScannerModal: React.FC = () => {
             }
             if (urlObj) {
               const uSid = urlObj.searchParams.get('sid') || urlObj.searchParams.get('session_id') || urlObj.searchParams.get('session');
-              const uTok = urlObj.searchParams.get('token') || urlObj.searchParams.get('session');
+              const uTok = urlObj.searchParams.get('token') || urlObj.searchParams.get('tok') || urlObj.searchParams.get('sessionToken') || urlObj.searchParams.get('session');
               if (uSid) sessionId = uSid;
               if (uTok) token = uTok;
             }
@@ -235,7 +251,7 @@ export const QRScannerModal: React.FC = () => {
     let isScanning = true;
 
     const scanLoop = () => {
-      if (!isScanning || !videoRef.current || !canvasRef.current) return;
+      if (!isScanning || !videoRef.current || !canvasRef.current || isProcessingScanRef.current) return;
       const video = videoRef.current;
 
       if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -252,7 +268,23 @@ export const QRScannerModal: React.FC = () => {
           });
 
           if (qrCode && qrCode.data && qrCode.data.trim().length > 0) {
+            if (isProcessingScanRef.current) return;
+            isProcessingScanRef.current = true;
+            setIsProcessingScan(true);
             isScanning = false;
+
+            // 1. Immediately stop camera stream and animation frame
+            if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current);
+              animationFrameRef.current = null;
+            }
+            if (streamRef.current) {
+              streamRef.current.getTracks().forEach((track) => track.stop());
+              streamRef.current = null;
+            }
+            setCameraActive(false);
+
+            // 2. Dispatch payload to backend
             handleScanPayload(qrCode.data.trim());
             return;
           }
@@ -276,6 +308,8 @@ export const QRScannerModal: React.FC = () => {
   if (!isQrScannerOpen) return null;
 
   const handleClose = () => {
+    isProcessingScanRef.current = false;
+    setIsProcessingScan(false);
     setIsQrScannerOpen(false);
     resetLastScanResult();
     setShowManualInput(false);
@@ -532,6 +566,28 @@ export const QRScannerModal: React.FC = () => {
             <p style={{ fontSize: '0.82rem', color: lastScanResult.duplicate ? '#92400E' : '#991B1B', margin: 0, lineHeight: 1.4 }}>
               {lastScanResult.message}
             </p>
+            <div style={{ marginTop: '12px' }}>
+              <button
+                type="button"
+                onClick={handleScanAgain}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#243B7A',
+                  color: '#FFFFFF',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <RotateCcw size={14} />
+                <span>Scan Again</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -678,7 +734,7 @@ export const QRScannerModal: React.FC = () => {
             )}
 
             {/* Validation Spinner Overlay */}
-            {isValidating && (
+            {(isValidating || isProcessingScan) && (
               <div
                 style={{
                   padding: '12px',
@@ -705,7 +761,7 @@ export const QRScannerModal: React.FC = () => {
                     animation: 'spin 0.7s linear infinite',
                   }}
                 />
-                <span>Validating attendance with server...</span>
+                <span>Verifying attendance...</span>
               </div>
             )}
 

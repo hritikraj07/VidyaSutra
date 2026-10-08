@@ -21,21 +21,27 @@ function AttendanceScanContent() {
   const router = useRouter();
 
   const sid = searchParams.get('sid') || searchParams.get('session_id') || searchParams.get('session') || '';
-  const token = searchParams.get('token') || searchParams.get('tok') || searchParams.get('session') || '';
+  const token = searchParams.get('token') || searchParams.get('tok') || searchParams.get('sessionToken') || searchParams.get('session') || '';
+  const sessionToken = searchParams.get('session') || searchParams.get('sessionToken') || token;
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [result, setResult] = useState<{
     success: boolean;
     duplicate?: boolean;
+    reason?: string;
     error?: string;
     message: string;
     details?: any;
+    subject?: string;
+    faculty?: string;
+    time?: string;
+    status?: string;
   } | null>(null);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginEmail, setLoginEmail] = useState('student@vidyasutra.edu.in');
-  const [loginPassword, setLoginPassword] = useState('VidyaSutra#2026!');
+  const [loginPassword, setLoginPassword] = useState('Student@123');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // 1. Check if student is already logged in
@@ -52,12 +58,12 @@ function AttendanceScanContent() {
         if (authData.user && authData.user.role === 'student') {
           setCurrentUser(authData.user);
           // Automatically validate scanned attendance
-          if (sid && token) {
-            await executeValidation(sid, token);
+          if (sid || token || sessionToken) {
+            await executeValidation(sid, token, sessionToken);
           } else {
             setResult({
               success: false,
-              message: 'Invalid attendance link. Missing session ID or verification token.',
+              message: 'This is not a valid VidyaSutra attendance QR.',
             });
             setIsLoading(false);
           }
@@ -70,7 +76,7 @@ function AttendanceScanContent() {
         setIsLoading(false);
         setResult({
           success: false,
-          message: 'Network error connecting to VidyaSutra gateway.',
+          message: 'Unable to connect to VidyaSutra. Please check your internet connection.',
         });
       }
     }
@@ -80,9 +86,9 @@ function AttendanceScanContent() {
     return () => {
       isMounted = false;
     };
-  }, [sid, token]);
+  }, [sid, token, sessionToken]);
 
-  const executeValidation = async (targetSid: string, targetToken: string) => {
+  const executeValidation = async (targetSid: string, targetToken: string, targetSessionToken?: string) => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/attendance/validate', {
@@ -91,6 +97,7 @@ function AttendanceScanContent() {
         body: JSON.stringify({
           sessionId: targetSid,
           token: targetToken,
+          sessionToken: targetSessionToken || targetToken,
         }),
       });
 
@@ -99,7 +106,7 @@ function AttendanceScanContent() {
     } catch (err: any) {
       setResult({
         success: false,
-        message: 'Unable to connect to VidyaSutra. Check your internet connection and try again.',
+        message: 'Unable to connect to VidyaSutra. Please check your internet connection.',
       });
     } finally {
       setIsLoading(false);

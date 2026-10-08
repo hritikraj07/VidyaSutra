@@ -157,7 +157,7 @@ export const TeacherQRSession: React.FC = () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://vidyasutra.vercel.app';
     const sid = activeSession.sessionId || activeSession.id;
     const tok = activeSession.masterToken || activeSession.currentToken || activeSession.token;
-    const scanUrl = `${baseUrl}/attendance/scan?sid=${sid}&token=${tok}`;
+    const scanUrl = `${baseUrl}/attendance/scan?sid=${sid}&token=${tok}&session=${tok}`;
 
     QRCode.toCanvas(
       canvasRef.current,
@@ -202,8 +202,7 @@ export const TeacherQRSession: React.FC = () => {
   const captureTeacherLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
     return new Promise((resolve) => {
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        // Fallback default coordinates if browser doesn't support geolocation
-        resolve({ latitude: 28.6139, longitude: 77.2090 });
+        resolve(null);
         return;
       }
 
@@ -221,12 +220,10 @@ export const TeacherQRSession: React.FC = () => {
         (err) => {
           console.warn('Teacher geolocation permission denied or timeout:', err.message);
           setIsCapturingGps(false);
-          // Fallback to campus classroom coordinates
-          const defaultLoc = { latitude: 28.6139, longitude: 77.2090 };
-          setTeacherGpsCenter(defaultLoc);
-          resolve(defaultLoc);
+          setTeacherGpsCenter(null);
+          resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     });
   };
@@ -1112,7 +1109,7 @@ export const TeacherQRSession: React.FC = () => {
                   </h3>
 
                   <p style={{ fontSize: '0.82rem', color: '#7F1D1D', margin: 0, lineHeight: 1.4 }}>
-                    The 2-minute validity window for this session has ended. This QR code is now invalid and can no longer be scanned.
+                    The validity window for this attendance session has ended. This QR code is now invalid and can no longer be scanned.
                   </p>
 
                   <button
