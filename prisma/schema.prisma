@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  password_hash       String
+  role                String               @default("STUDENT") // STUDENT, ADMIN, FACULTY, MENTOR, COORDINATOR
+  created_at          DateTime             @default(now())
+  last_login_at       DateTime?
+  student             StudentProfile?
+  teacher_assignments TeacherAssignment[]
+  attendance_sessions AttendanceSession[]
+  attendance_records  AttendanceRecord[]
+  timetable_entries   TimetableEntry[]
+
+  @@map("users")
+}
+
+model StudentProfile {
+  id             String            @id @default(cuid())
+  user_id        String            @unique
+  user           User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  roll_no        String            @unique
+  course         String            @default("Computer Science & Engineering")
+  department     String            @default("Computer Science & Engineering")
+  semester       Int               @default(1)
+  section        String            @default("A")
+  admission_year Int               @default(2023)
+  courses        CourseAllotment[]
+  analytics_profile StudentAnalyticsProfile?
+
+  @@map("student_profiles")
+}
+
+model StudentAnalyticsProfile {
+  id                      String         @id @default(cuid())
+  student_profile_id      String         @unique
+  student_profile         StudentProfile @relation(fields: [student_profile_id], references: [id], onDelete: Cascade)
+  
+  // Academic Performance Indicators
+  cgpa                    Float          @default(7.5)
+  internal_marks_avg      Float          @default(74.0)
+  semester_marks_avg      Float          @default(72.0)
+  backlogs_count          Int            @default(0)
+  academic_trend          String         @default("stable") // "improving", "stable", "declining"
+  
+  // LMS & Learning Activity
+  assignments_completed   Int            @default(8)
+  assignments_total       Int            @default(10)
+  lms_activity_score      Float          @default(80.0) // 0-100
+  
+  // Engagement & Extracurriculars
+  events_attended_count   Int            @default(3)
+  clubs_count             Int            @default(1)
+  hackathons_count        Int            @default(1)
+  certifications_count    Int            @default(2)
+  engagement_score        Float          @default(70.0) // 0-100
+  
+  // Placement & Career Readiness
+  aptitude_score          Float          @default(72.0) // 0-100
+  coding_score            Float          @default(68.0) // 0-100
+  mock_interview_score    Float          @default(70.0) // 0-100
+  placement_readiness_pct Float          @default(70.0) // 0-100
+  placement_status        String         @default("in_preparation") // "in_preparation", "ready", "placed"
+  
+  // Skills & Feedback
+  verified_skills_count   Int            @default(4)
+  faculty_feedback_rating Float          @default(4.0) // 1-5 scale
+  faculty_feedback_notes  String?
+  
+  updated_at              DateTime       @updatedAt
+  created_at              DateTime       @default(now())
+
+  @@map("student_analytics_profiles")
+}
+
+model CourseAllotment {
+  id           String         @id @default(cuid())
+  student_id   String
+  student      StudentProfile @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  subject_code String
+  subject_name String
+  status       String         @default("ACTIVE") // ACTIVE, COMPLETED, DROPPED
+
+  @@map("course_allotments")
+}
+
+model TeacherAssignment {
+  id          String   @id @default(cuid())
+  teacher_id  String
+  teacher     User     @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  course_code String
+  course_name String
+  section     String   @default("A")
+  room        String   @default("Lecture Hall 401")
+  created_at  DateTime @default(now())
+
+  @@unique([teacher_id, course_code, section])
+  @@map("teacher_assignments")
+}
+
+model AttendanceSession {
+  id                String             @id @default(cuid())
+  teacher_id        String
+  teacher           User               @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  course_code       String
+  course_name       String
+  course            String?            @default("Computer Science & Engineering")
+  section           String
+  semester          Int?               @default(1)
+  room              String
+  session_name      String             @default("Regular Lecture")
+  timetable_id      String?
+  period            String?            @default("1")
+  secret_salt       String
+  teacher_latitude  Float?
+  teacher_longitude Float?
+  radius_meters     Float              @default(30.0)
+  status            String             @default("ACTIVE") // ACTIVE, ENDED
+  is_active         Boolean            @default(true)
+  started_at        DateTime           @default(now())
+  ended_at          DateTime?
+  records           AttendanceRecord[]
+
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id                    String            @id @default(cuid())
+  session_id            String
+  session               AttendanceSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  student_id            String
+  student               User              @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  student_name          String
+  roll_no               String
+  token_used            String?
+  status                String            @default("PRESENT") // PRESENT, ABSENT
+  source                String            @default("qr") // qr, manual
+  student_latitude      Float?
+  student_longitude     Float?
+  gps_accuracy          Float?
+  distance_from_teacher Float?
+  teacher_id            String?
+  marked_at             DateTime          @default(now())
+
+  @@unique([session_id, student_id])
+  @@map("attendance_records")
+}
+
+model AttendanceSetting {
+  id                    String   @id @default("default")
+  radius_meters         Float    @default(30.0)
+  qr_refresh_seconds    Int      @default(5)
+  session_duration_mins Int      @default(60)
+  updated_at            DateTime @updatedAt
+
+  @@map("attendance_settings")
+}
+
+model TimetableEntry {
+  id           String   @id @default(cuid())
+  course       String   // e.g. "Computer Science & Engineering"
+  semester     Int      @default(1)
+  section      String   // e.g. "CSE-A", "A", "B"
+  day          String   // "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+  start_time   String   // e.g. "09:00 AM"
+  end_time     String   // e.g. "10:00 AM"
+  subject      String   // e.g. "Data Structures & Algorithms"
+  subject_code String?  // e.g. "CS301"
+  teacher_name String   // e.g. "Dr. Ramesh Verma"
+  teacher_id   String?
+  room         String   // e.g. "Hall 301"
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  teacher      User?    @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
+
+  @@index([course, semester, section])
+  @@index([day])
+  @@index([teacher_id])
+  @@map("timetable_entries")
+}
