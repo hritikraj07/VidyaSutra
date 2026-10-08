@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useApp } from '@/context/AppContext';
 import {
   Users,
   Search,
@@ -32,8 +33,6 @@ interface StudentData {
   createdAt: string;
   coursesCount: number;
 }
-
-import { useApp } from '@/context/AppContext';
 
 export default function AdminStudentsPage() {
   const router = useRouter();

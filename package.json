@@ -10,7 +10,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "node scripts/seed.mjs",
-    "test": "node --test tests/unit/*.test.mjs tests/integration/*.test.mjs"
+    "test": "node --test tests/unit/*.test.mjs tests/integration/*.test.mjs tests/e2e/*.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
