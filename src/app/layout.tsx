@@ -5,16 +5,14 @@ export const metadata: Metadata = {
   title: "VidyaSutra — Student Success",
   description: "Next-generation institutional academic ecosystem: dynamic attendance verification, timetable, assignments, transparent success score, and mentor risk triage.",
   icons: {
-    icon: "/logo-emblem.png",
-    apple: "/logo-emblem.png",
+    icon: "/logo.webp",
+    apple: "/logo.webp",
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#2563EB",
 };
 

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -176,9 +177,11 @@ function AttendanceScanContent() {
             marginBottom: '12px',
           }}
         >
-          <img
-            src="/logo.jpg"
-            alt="VidyaSutra Logo"
+          <Image
+            src="/logo.webp"
+            alt="VidyaSutra Official Logo"
+            width={56}
+            height={56}
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           />
         </div>

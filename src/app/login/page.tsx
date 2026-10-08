@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   Lock,
   Mail,
@@ -22,7 +23,7 @@ const INSTITUTIONAL_DOMAIN = '@vidyasutra.edu.in';
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   // Enforce zero page-level scrolling (single viewport fit)
   useEffect(() => {
@@ -44,15 +45,15 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Subtle card parallax offset (-2.5px to +2.5px max, calm & stable)
-  const [cardOffset, setCardOffset] = useState({ x: 0, y: 0 });
+  // Subtle card parallax offset (-2.5px to +2.5px max) applied via ref to avoid React re-renders
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const handleMouseMoveOffset = useCallback((normX: number, normY: number) => {
-    // Very gentle parallax translation: 2.5px max
-    setCardOffset({
-      x: Math.round(normX * 2.5 * 10) / 10,
-      y: Math.round(normY * 2.5 * 10) / 10,
-    });
+    if (cardRef.current) {
+      const x = Math.round(normX * 2.5 * 10) / 10;
+      const y = Math.round(normY * 2.5 * 10) / 10;
+      cardRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    }
   }, []);
 
   // Validate institutional email
@@ -217,7 +218,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div
+    <main
+      id="main-content"
       style={{
         position: 'relative',
         height: '100vh',
@@ -257,6 +259,7 @@ export default function LoginPage() {
 
       {/* 3. Main Card & Form Structure */}
       <div
+        ref={cardRef}
         className="animate-login-card"
         style={{
           position: 'relative',
@@ -267,7 +270,6 @@ export default function LoginPage() {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          transform: `translate3d(${cardOffset.x}px, ${cardOffset.y}px, 0)`,
           transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
         }}
       >
@@ -301,10 +303,13 @@ export default function LoginPage() {
               overflow: 'hidden',
             }}
           >
-            {/* The Existing VidyaSutra Logo (Unmodified) */}
-            <img
-              src="/logo.jpg"
+            {/* The Existing VidyaSutra Logo (Optimized WebP with Priority) */}
+            <Image
+              src="/logo.webp"
               alt="VidyaSutra Official Logo"
+              width={80}
+              height={76}
+              priority
               style={{
                 width: '100%',
                 height: '100%',
@@ -638,7 +643,8 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '10px 38px 10px 36px',
+                    minHeight: '44px',
+                    padding: '10px 48px 10px 36px',
                     borderRadius: '10px',
                     border: '1.5px solid #CBD5E1',
                     fontSize: '0.86rem',
@@ -665,22 +671,27 @@ export default function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   style={{
                     position: 'absolute',
-                    right: '12px',
+                    right: '4px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
                     color: '#64748B',
-                    padding: '4px',
+                    width: '44px',
+                    height: '44px',
+                    minWidth: '44px',
+                    minHeight: '44px',
                     display: 'flex',
                     alignItems: 'center',
-                    borderRadius: '4px',
+                    justifyContent: 'center',
+                    borderRadius: '8px',
+                    padding: 0,
                   }}
                   title={showPassword ? 'Hide password' : 'Show password'}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
@@ -1010,6 +1021,6 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

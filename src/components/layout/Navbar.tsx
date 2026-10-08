@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
 import {
   QrCode,
@@ -100,9 +101,11 @@ export const Navbar: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            <img
-              src="/logo.jpg"
-              alt="VidyaSutra Logo"
+            <Image
+              src="/logo.webp"
+              alt="VidyaSutra Official Logo"
+              width={28}
+              height={28}
               style={{
                 width: '100%',
                 height: '100%',

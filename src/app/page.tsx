@@ -2,24 +2,55 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import gsap from 'gsap';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { StudentDashboard } from '@/features/dashboard/StudentDashboard';
 import { TeacherDashboard } from '@/features/dashboard/TeacherDashboard';
-import { AdminDashboard } from '@/features/admin/AdminDashboard';
 import { TimetableModule } from '@/features/timetable/TimetableModule';
 import { AttendanceView } from '@/features/attendance/AttendanceView';
 import { AssignmentsModule } from '@/features/assignments/AssignmentsModule';
-import { SkillsModule } from '@/features/skills/SkillsModule';
-import { PlacementsModule } from '@/features/placements/PlacementsModule';
-import { TeacherQRSession } from '@/features/attendance/TeacherQRSession';
-import { QRScannerModal } from '@/features/attendance/QRScannerModal';
-import { SuccessScoreModal } from '@/features/scores/SuccessScoreModal';
-import { TeacherAnalyticsView } from '@/features/analytics/TeacherAnalyticsView';
-import { FacultyDashboardView } from '@/features/analytics/FacultyDashboardView';
-import { CoordinatorAnalyticsView } from '@/features/analytics/CoordinatorAnalyticsView';
+
+// Dynamic code-splitting for heavy modals and secondary views
+const AdminDashboard = dynamic(
+  () => import('@/features/admin/AdminDashboard').then((m) => m.AdminDashboard),
+  { ssr: false }
+);
+const SkillsModule = dynamic(
+  () => import('@/features/skills/SkillsModule').then((m) => m.SkillsModule),
+  { ssr: false }
+);
+const PlacementsModule = dynamic(
+  () => import('@/features/placements/PlacementsModule').then((m) => m.PlacementsModule),
+  { ssr: false }
+);
+const TeacherQRSession = dynamic(
+  () => import('@/features/attendance/TeacherQRSession').then((m) => m.TeacherQRSession),
+  { ssr: false }
+);
+const QRScannerModal = dynamic(
+  () => import('@/features/attendance/QRScannerModal').then((m) => m.QRScannerModal),
+  { ssr: false }
+);
+const SuccessScoreModal = dynamic(
+  () => import('@/features/scores/SuccessScoreModal').then((m) => m.SuccessScoreModal),
+  { ssr: false }
+);
+const TeacherAnalyticsView = dynamic(
+  () => import('@/features/analytics/TeacherAnalyticsView').then((m) => m.TeacherAnalyticsView),
+  { ssr: false }
+);
+const FacultyDashboardView = dynamic(
+  () => import('@/features/analytics/FacultyDashboardView').then((m) => m.FacultyDashboardView),
+  { ssr: false }
+);
+const CoordinatorAnalyticsView = dynamic(
+  () => import('@/features/analytics/CoordinatorAnalyticsView').then((m) => m.CoordinatorAnalyticsView),
+  { ssr: false }
+);
 
 const MainPortal: React.FC = () => {
   const router = useRouter();
@@ -94,9 +125,12 @@ const MainPortal: React.FC = () => {
             boxShadow: '0 8px 24px -4px rgba(23, 37, 84, 0.12)',
           }}
         >
-          <img
-            src="/logo.jpg"
-            alt="VidyaSutra Logo"
+          <Image
+            src="/logo.webp"
+            alt="VidyaSutra Official Logo"
+            width={48}
+            height={48}
+            priority
             style={{
               width: '100%',
               height: '100%',

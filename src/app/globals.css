@@ -379,23 +379,19 @@ select:disabled, .vs-select:disabled {
 }
 
 .animate-form-stagger-1 {
-  opacity: 0;
-  animation: formItemFadeIn 500ms cubic-bezier(0.16, 1, 0.3, 1) 180ms forwards;
+  animation: formItemFadeIn 450ms cubic-bezier(0.16, 1, 0.3, 1) 120ms backwards;
 }
 
 .animate-form-stagger-2 {
-  opacity: 0;
-  animation: formItemFadeIn 500ms cubic-bezier(0.16, 1, 0.3, 1) 300ms forwards;
+  animation: formItemFadeIn 450ms cubic-bezier(0.16, 1, 0.3, 1) 220ms backwards;
 }
 
 .animate-form-stagger-3 {
-  opacity: 0;
-  animation: formItemFadeIn 500ms cubic-bezier(0.16, 1, 0.3, 1) 420ms forwards;
+  animation: formItemFadeIn 450ms cubic-bezier(0.16, 1, 0.3, 1) 320ms backwards;
 }
 
 .animate-form-stagger-4 {
-  opacity: 0;
-  animation: formItemFadeIn 500ms cubic-bezier(0.16, 1, 0.3, 1) 540ms forwards;
+  animation: formItemFadeIn 450ms cubic-bezier(0.16, 1, 0.3, 1) 420ms backwards;
 }
 
 /* Universal Custom Select Dropdown Styling */

@@ -120,6 +120,37 @@ export const AuthBackgroundCanvas: React.FC<{
       }
     };
 
+    let cachedBgGrad: CanvasGradient | null = null;
+    let cachedCardGlow: CanvasGradient | null = null;
+
+    const updateCachedGradients = () => {
+      // 1. Base atmospheric gradient
+      cachedBgGrad = ctx.createRadialGradient(
+        width * 0.5,
+        height * 0.4,
+        60,
+        width * 0.5,
+        height * 0.5,
+        Math.max(width, height) * 0.9
+      );
+      cachedBgGrad.addColorStop(0, '#1E3264');
+      cachedBgGrad.addColorStop(0.45, '#131F46');
+      cachedBgGrad.addColorStop(1, '#090E1F');
+
+      // 2. Center ambient card glow
+      cachedCardGlow = ctx.createRadialGradient(
+        width * 0.5,
+        height * 0.5,
+        0,
+        width * 0.5,
+        height * 0.5,
+        320
+      );
+      cachedCardGlow.addColorStop(0, 'rgba(36, 59, 122, 0.22)');
+      cachedCardGlow.addColorStop(0.4, 'rgba(231, 162, 59, 0.03)');
+      cachedCardGlow.addColorStop(1, 'rgba(11, 18, 41, 0)');
+    };
+
     const resize = () => {
       if (!canvas) return;
       width = window.innerWidth;
@@ -132,6 +163,7 @@ export const AuthBackgroundCanvas: React.FC<{
       canvas.style.height = `${height}px`;
 
       ctx.scale(dpr, dpr);
+      updateCachedGradients();
       initParticles();
 
       if (prefersReducedMotion) {
@@ -139,49 +171,29 @@ export const AuthBackgroundCanvas: React.FC<{
       }
     };
 
-    window.addEventListener('resize', resize);
+    window.addEventListener('resize', resize, { passive: true });
     resize();
 
     // Render static frame when reduced motion is requested
     const renderStaticBackground = () => {
-      // 1. Deep Navy to Indigo atmospheric base gradient
-      const bgGrad = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.42,
-        40,
-        width * 0.5,
-        height * 0.5,
-        Math.max(width, height) * 0.85
-      );
-      // Center: Deep Indigo (#1F3266)
-      bgGrad.addColorStop(0, '#1E3264');
-      // Mid: Deep Navy (#172554)
-      bgGrad.addColorStop(0.48, '#131F46');
-      // Edge: Midnight Academic Navy (#0B1229)
-      bgGrad.addColorStop(1, '#090E1F');
-
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, width, height);
-
-      // 2. Subtle central atmospheric glow
-      const centralGlow = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.48,
-        0,
-        width * 0.5,
-        height * 0.48,
-        340
-      );
-      centralGlow.addColorStop(0, 'rgba(36, 59, 122, 0.28)');
-      centralGlow.addColorStop(0.5, 'rgba(23, 37, 84, 0.14)');
-      centralGlow.addColorStop(1, 'rgba(15, 23, 42, 0)');
-      ctx.fillStyle = centralGlow;
-      ctx.fillRect(0, 0, width, height);
+      if (cachedBgGrad) {
+        ctx.fillStyle = cachedBgGrad;
+        ctx.fillRect(0, 0, width, height);
+      }
+      if (cachedCardGlow) {
+        ctx.fillStyle = cachedCardGlow;
+        ctx.fillRect(0, 0, width, height);
+      }
     };
 
     lastTime = performance.now();
 
     const animate = (currentTime: number) => {
+      if (document.hidden) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
       const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
       lastTime = currentTime;
 
@@ -191,22 +203,11 @@ export const AuthBackgroundCanvas: React.FC<{
         currentMouseY += (targetMouseY - currentMouseY) * 0.055;
       }
 
-      // ==========================================
-      // LAYER 1: ATMOSPHERIC DEEP NAVY / INDIGO BASE
-      // ==========================================
-      const bgGrad = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.4,
-        60,
-        width * 0.5,
-        height * 0.5,
-        Math.max(width, height) * 0.9
-      );
-      bgGrad.addColorStop(0, '#1E3264'); // Indigo atmospheric center
-      bgGrad.addColorStop(0.45, '#131F46'); // Deep Navy
-      bgGrad.addColorStop(1, '#090E1F'); // Deepest midnight border
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, width, height);
+      // LAYER 1: ATMOSPHERIC DEEP NAVY / INDIGO BASE (using cached gradient)
+      if (cachedBgGrad) {
+        ctx.fillStyle = cachedBgGrad;
+        ctx.fillRect(0, 0, width, height);
+      }
 
       // Subtle ambient light following cursor
       if (hasMouseMoved) {
@@ -216,37 +217,25 @@ export const AuthBackgroundCanvas: React.FC<{
           0,
           currentMouseX,
           currentMouseY,
-          360
+          340
         );
-        // Soft Indigo ambient halo
-        cursorGlow.addColorStop(0, 'rgba(36, 59, 122, 0.18)');
-        // Trace touch of warm Saffron (extremely restrained ~4%)
-        cursorGlow.addColorStop(0.2, 'rgba(231, 162, 59, 0.035)');
-        cursorGlow.addColorStop(0.65, 'rgba(23, 37, 84, 0.08)');
+        cursorGlow.addColorStop(0, 'rgba(36, 59, 122, 0.16)');
+        cursorGlow.addColorStop(0.2, 'rgba(231, 162, 59, 0.03)');
+        cursorGlow.addColorStop(0.65, 'rgba(23, 37, 84, 0.07)');
         cursorGlow.addColorStop(1, 'rgba(15, 23, 42, 0)');
         ctx.fillStyle = cursorGlow;
         ctx.fillRect(0, 0, width, height);
       }
 
-      // Central ambient glow behind login card position
-      const cardGlow = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.5,
-        0,
-        width * 0.5,
-        height * 0.5,
-        320
-      );
-      cardGlow.addColorStop(0, 'rgba(36, 59, 122, 0.22)');
-      cardGlow.addColorStop(0.4, 'rgba(231, 162, 59, 0.03)'); // subtle saffron warmth in center
-      cardGlow.addColorStop(1, 'rgba(11, 18, 41, 0)');
-      ctx.fillStyle = cardGlow;
-      ctx.fillRect(0, 0, width, height);
+      // Central ambient glow behind login card position (using cached gradient)
+      if (cachedCardGlow) {
+        ctx.fillStyle = cachedCardGlow;
+        ctx.fillRect(0, 0, width, height);
+      }
 
-      // ==========================================
       // LAYER 2 & 3: MIDGROUND & FOREGROUND PARTICLES
-      // ==========================================
-      const maxConnDist = width < 768 ? 85 : 110;
+      const maxConnDist = width < 768 ? 75 : 105;
+      const maxConnDistSq = maxConnDist * maxConnDist;
 
       // 1. Draw thin, elegant network lines
       for (let i = 0; i < particles.length; i++) {
@@ -259,9 +248,10 @@ export const AuthBackgroundCanvas: React.FC<{
 
           const dx = p1.x - p2.x;
           const dy = p1.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const distSq = dx * dx + dy * dy;
 
-          if (dist < maxConnDist) {
+          if (distSq < maxConnDistSq) {
+            const dist = Math.sqrt(distSq);
             const alpha = (1 - dist / maxConnDist) * 0.14;
             ctx.beginPath();
             ctx.strokeStyle = p1.isAccent || p2.isAccent
@@ -341,13 +331,27 @@ export const AuthBackgroundCanvas: React.FC<{
     };
 
     if (!prefersReducedMotion) {
-      animationFrameId = requestAnimationFrame(animate);
+      renderStaticBackground();
+      animationFrameId = requestAnimationFrame(() => {
+        animationFrameId = requestAnimationFrame(animate);
+      });
     } else {
       renderStaticBackground();
     }
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(animationFrameId);
+      } else if (!prefersReducedMotion) {
+        lastTime = performance.now();
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelAnimationFrame(animationFrameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', handleMouseMove);
       if (mediaQuery.removeEventListener) {

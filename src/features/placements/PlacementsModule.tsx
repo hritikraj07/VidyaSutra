@@ -102,7 +102,7 @@ export const PlacementsModule: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <img
                     src={job.logo}
-                    alt={job.company}
+                    alt={job.company ? `${job.company} logo` : "Company logo"}
                     style={{
                       width: '48px',
                       height: '48px',
